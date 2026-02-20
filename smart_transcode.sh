@@ -9,11 +9,6 @@ if [[ "$MTX_PATH" != *"_input"* ]]; then
     exit 0
 fi
 
-# RTSP Port will be determined later from config, but we need it here.
-# Moving config reading up before defining SOURCE_RTSP is better, 
-# but to keep diff minimal, we will read it again or move blocks.
-# Let's use a placeholder first, then update after reading config.
-
 # Read recording settings from config.json with fallback values
 CONFIG_FILE="$SCRIPT_DIR/config.json"
 
@@ -50,7 +45,6 @@ SOURCE_RTSP="rtsp://127.0.0.1:$RTSP_PORT/$MTX_PATH"
 TARGET_NAME="${MTX_PATH/_input/}"
 TARGET_RTSP="rtsp://127.0.0.1:$RTSP_PORT/$TARGET_NAME"
 
-
 VIDEO_CODEC_CONFIG=$(get_config_value "video_codec" "h264")
 RESOLUTION_CONFIG=$(get_config_value "resolution" "720p")
 VIDEO_BITRATE_CONFIG=$(get_config_value "bitrate" "800k")
@@ -86,7 +80,7 @@ echo "[$(date)] Detected video codec: '$VIDEO_CODEC'" >> "$LOG_FILE"
 echo "[$(date)] Config codec: '$VIDEO_CODEC_CONFIG', Resolution: '$RESOLUTION_CONFIG', FPS: $VIDEO_FPS, Bitrate: $VIDEO_BITRATE" >> "$LOG_FILE"
 
 # Build FFmpeg command
-FFMPEG_CMD="ffmpeg -hide_banner -loglevel error -rtsp_transport tcp -i \"$SOURCE_RTSP\""
+FFMPEG_CMD="ffmpeg -hide_banner -loglevel error -fflags +genpts -analyzeduration 10M -probesize 10M -flags +discardcorrupt -fps_mode passthrough -rtsp_transport tcp -i \"$SOURCE_RTSP\""
 
 # Video codec
 if [ "$VIDEO_CODEC_CONFIG" = "h265" ] || [ "$VIDEO_CODEC_CONFIG" = "hevc" ]; then

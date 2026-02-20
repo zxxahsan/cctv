@@ -165,7 +165,7 @@
                         <%= recordings.length %> File Tersimpan
                     </span>
                     <div class="flex gap-2">
-                        <input type="date" id="dateFilter" class="date-filter" onchange="filterByDate()">
+                        <input type="date" id="dateFilter" class="date-filter" onchange="filterByDate()" value="<%= typeof filterDate !== 'undefined' ? filterDate : '' %>">
                         <select id="cameraFilter" class="date-filter" onchange="filterByCamera()">
                             <option value="">Semua Kamera</option>
                             <% if (cameras && cameras.length> 0) { %>
@@ -397,15 +397,9 @@
         let filteredRecordings = [...allRecordings];
 
         document.addEventListener('DOMContentLoaded', () => {
-            // Find the latest recording date if available
-            if (allRecordings.length > 0) {
-                // Sort descending by time just in case, to get the absolute latest
-                const sortedRecs = [...allRecordings].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-
-                const latestDate = new Date(sortedRecs[0].created_at);
-                document.getElementById('dateFilter').valueAsDate = latestDate;
-            } else {
-                document.getElementById('dateFilter').valueAsDate = new Date();
+            const df = document.getElementById('dateFilter');
+            if (!df.value) {
+                df.valueAsDate = new Date();
             }
 
             renderTimeline();

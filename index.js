@@ -8,6 +8,7 @@ const session = require('express-session');
 const config = require('./config.json');
 const telegramBot = require('./telegram_bot');
 const webPush = require('web-push');
+const bcrypt = require('bcrypt');
 
 const app = express();
 const PORT = config.server.port || 3003;
@@ -40,6 +41,21 @@ let diskUsage = { total: 0, used: 0, percent: 0 };
 let diskCriticalAlerted = false;
 let mediaMtxErrorNotified = false;
 let loginAttempts = {};
+
+function formatDateJakarta(date) {
+    const parts = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Asia/Jakarta',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+    }).formatToParts(date);
+    const get = (t) => parts.find(p => p.type === t)?.value || '00';
+    return `${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')}:${get('second')}`;
+}
 
 // RTSP URL Templates for various camera brands
 const RTSP_TEMPLATES = {
@@ -225,38 +241,11 @@ const requireApiAuth = (req, res, next) => {
 // --- MediaMTX Helper Functions ---
 
 function sendTelegramMessage(text) {
-    if (!config.telegram || !config.telegram.enabled || !config.telegram.bot_token || !config.telegram.chat_id) {
-        return;
-    }
-
-    const https = require('https');
-    const data = JSON.stringify({
-        chat_id: config.telegram.chat_id,
-        text: text,
-        parse_mode: 'HTML'
-    });
-
-    const options = {
-        hostname: 'api.telegram.org',
-        port: 443,
-        path: `/bot${config.telegram.bot_token}/sendMessage`,
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Content-Length': data.length
-        }
-    };
-
-    const req = https.request(options, (res) => {
-        res.on('data', () => { });
-    });
-
-    req.on('error', (e) => {
+    try {
+        telegramBot.sendMessage(text);
+    } catch (e) {
         console.error('Telegram Error:', e.message);
-    });
-
-    req.write(data);
-    req.end();
+    }
 }
 
 
@@ -593,15 +582,18 @@ app.get('/', (req, res) => {
 // Public Archive (Recordings)
 app.get('/archive', (req, res) => {
     console.log('Accessing /archive route');
+    const defaultDate = formatDateJakarta(new Date()).slice(0, 10);
+    const selectedDate = (req.query && req.query.date) ? String(req.query.date) : defaultDate;
     const query = `
         SELECT r.*, c.nama as camera_name 
         FROM recordings r 
         LEFT JOIN cameras c ON r.camera_id = c.id 
+        WHERE r.created_at LIKE ? || '%'
         ORDER BY r.created_at DESC
         LIMIT ?
     `;
 
-    db.all(query, [RECORDINGS_PAGE_LIMIT], (err, rows) => {
+    db.all(query, [selectedDate, RECORDINGS_PAGE_LIMIT], (err, rows) => {
         if (err) {
             console.error(err.message);
             return res.status(500).send("Database Error");
@@ -612,7 +604,8 @@ app.get('/archive', (req, res) => {
             res.render('public_recordings', {
                 recordings: rows,
                 cameras: cams || [],
-                site: config.site
+                site: config.site,
+                filterDate: selectedDate
             });
         });
     });
@@ -630,7 +623,13 @@ app.post('/login', (req, res) => {
     const { username, password } = req.body;
     console.log(`[Login] Attempt for user: ${username}`);
 
-    if (username === ADMIN_USER && password === ADMIN_PASS) {
+    const cfgUser = (config.authentication && config.authentication.username) ? config.authentication.username : ADMIN_USER;
+    const cfgPlain = (config.authentication && config.authentication.password) ? config.authentication.password : ADMIN_PASS;
+    const cfgHash = (config.authentication && config.authentication.password_hash) ? config.authentication.password_hash : null;
+    const userOk = username === cfgUser;
+    const passOk = cfgHash ? bcrypt.compareSync(password, cfgHash) : (password === cfgPlain);
+
+    if (userOk && passOk) {
         req.session.user = username;
         console.log(`[Login] Success - Session ID: ${req.sessionID}`);
         const ip = req.ip || req.connection.remoteAddress || 'unknown';
@@ -707,7 +706,7 @@ app.get('/api/cameras', (req, res) => {
     // Optional: Public read access for cameras JSON? Or strictly admin?
     // Let's keep read public for now as dashboard might use it or external tools.
     // If strict admin needed, add requireApiAuth.
-    db.all("SELECT * FROM cameras", [], (err, rows) => {
+    db.all("SELECT id, nama, lokasi, lat, lng, ptz_enabled, onvif_port FROM cameras", [], (err, rows) => {
         res.json({ data: rows });
     });
 });
@@ -922,6 +921,28 @@ app.post('/api/settings/telegram', requireApiAuth, (req, res) => {
             sendTelegramMessage("<b>✅ CCTV System</b>\nNotifikasi Telegram telah diaktifkan.");
         }
     });
+});
+
+// Restart Telegram Bot (apply latest token/chat_id without server restart)
+app.post('/api/telegram/restart', requireApiAuth, (req, res) => {
+    try {
+        telegramBot.restart(config, db, {
+            getCameraStatus: () => cameraStatus,
+            getDiskUsage: () => diskUsage,
+            restartSystem: telegramRestartSystem,
+            cleanupRecordings: telegramCleanupWrapper,
+            getRtspTemplates: () => RTSP_TEMPLATES,
+            generateRtspUrl: generateRtspUrl,
+            updateAdminCredentials: telegramUpdateAdminCredentials
+        });
+        res.json({ message: 'Telegram bot restarted' });
+        if (config.telegram?.enabled) {
+            sendTelegramMessage('<b>🔄 Bot Telegram</b>\nBot berhasil direstart dengan pengaturan terbaru.');
+        }
+    } catch (e) {
+        console.error('Telegram restart error:', e.message);
+        res.status(500).json({ error: 'Failed to restart bot' });
+    }
 });
 
 // Update MediaMTX Settings
@@ -1212,8 +1233,9 @@ app.post('/api/recordings/notify', (req, res) => {
         console.error("Could not get file stats for " + file);
     }
 
-    db.run(`INSERT INTO recordings (camera_id, filename, file_path, size) VALUES (?, ?, ?, ?)`,
-        [cameraId, filename, relativePath, size],
+    const createdAt = formatDateJakarta(new Date());
+    db.run(`INSERT INTO recordings (camera_id, filename, file_path, size, created_at) VALUES (?, ?, ?, ?, ?)`,
+        [cameraId, filename, relativePath, size, createdAt],
         (err) => {
             if (err) console.error("Database error saving recording:", err.message);
             res.json({ status: "ok" });
@@ -1403,7 +1425,6 @@ app.get('/api/system/version', (req, res) => {
     }
 });
 
-
 app.post('/api/system/update', requireApiAuth, (req, res) => {
     console.log('[System Update] Update requested from admin panel.');
     const { exec } = require('child_process');
@@ -1535,9 +1556,7 @@ function scanExistingRecordings() {
                                 try {
                                     const stats = fs.statSync(filePath);
                                     const size = stats.size;
-                                    // Format Date to SQLite format: YYYY-MM-DD HH:MM:SS
-                                    const mtime = stats.mtime;
-                                    const createdAt = mtime.toISOString().replace('T', ' ').substring(0, 19);
+                                    const createdAt = formatDateJakarta(stats.mtime);
 
                                     stmt.run(cameraId, filename, relativePath, size, createdAt, (err) => {
                                         if (err) console.error(`Failed to import ${filename}:`, err.message);
@@ -1572,78 +1591,7 @@ function scanExistingRecordings() {
 }
 
 // --- System Update API ---
-app.get('/api/system/version', (req, res) => {
-    try {
-        const versionPath = path.join(__dirname, 'version.txt');
-        const fs = require('fs');
-        if (fs.existsSync(versionPath)) {
-            const version = fs.readFileSync(versionPath, 'utf8').trim();
-            res.json({ version: version });
-        } else {
-            res.json({ version: '1.0.0 (default)' });
-        }
-    } catch (e) {
-        res.json({ version: '1.0.0' });
-    }
-});
-
-
-app.post('/api/system/update', requireApiAuth, (req, res) => {
-    console.log('[System Update] Update requested from admin panel.');
-    const { exec } = require('child_process');
-
-    // Step 1: Git Pull
-    exec('git pull', (err, stdout, stderr) => {
-        if (err) {
-            console.error('[Update] Git pull failed:', err);
-            sendTelegramMessage(`❌ <b>Update aplikasi gagal</b>\nLangkah: git pull\nError: ${err.message}`);
-            return res.status(500).json({
-                success: false,
-                message: 'Gagal melakukan git pull. Pastikan Git terpasang dan remote repository tersedia.',
-                error: err.message,
-                stderr: stderr
-            });
-        }
-
-        console.log('[Update] Git pull success:', stdout);
-        sendTelegramMessage('⬇️ <b>Update aplikasi dimulai</b>\nGit pull berhasil. Melanjutkan npm install dan restart (jika Linux).');
-
-        // Respond to user immediately so they see success before server goes down
-        res.json({
-            success: true,
-            message: 'Git pull berhasil. Kode terbaru telah diunduh.',
-            output: stdout
-        });
-
-        // Step 2 & 3: NPM Install and Restart in background
-        // We use a delay to allow the response to reach the client
-        setTimeout(() => {
-            console.log('[Update] Starting npm install and restart sequence...');
-
-            exec('npm install --omit=dev', (npmerr) => {
-                if (npmerr) {
-                    console.error('[Update] NPM install failed:', npmerr);
-                    sendTelegramMessage(`❌ <b>Update aplikasi gagal</b>\nLangkah: npm install --omit=dev\nError: ${npmerr.message}`);
-                } else {
-                    console.log('[Update] NPM install success');
-                    sendTelegramMessage('✅ <b>Update aplikasi: npm install selesai</b>');
-                }
-
-                if (process.platform === 'linux') {
-                    console.log('[Update] Linux detected. Triggering systemctl restart...');
-                    exec('sudo systemctl restart mediamtx cctv-web', (restarterr) => {
-                        if (restarterr) {
-                            console.error('[Update] Restart command failed:', restarterr);
-                            sendTelegramMessage(`⚠️ <b>Update aplikasi: restart gagal</b>\nPeriksa service mediamtx dan cctv-web.\nError: ${restarterr.message}`);
-                        } else {
-                            sendTelegramMessage('🚀 <b>Update aplikasi selesai</b>\nService mediamtx dan cctv-web sudah direstart.');
-                        }
-                    });
-                }
-            });
-        }, 3000);
-    });
-});
+ 
 
 app.listen(PORT, () => {
 
@@ -1782,27 +1730,17 @@ function telegramUpdateAdminCredentials(username, password) {
         const fs = require('fs');
         const path = require('path');
         const bcrypt = require('bcrypt');
-        
-        // Read current config
         const configPath = path.join(__dirname, 'config.json');
         const currentConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-        
-        // Hash password
         const saltRounds = 10;
         const hashedPassword = bcrypt.hashSync(password, saltRounds);
-        
-        // Update config
-        currentConfig.auth = {
-            username: username,
-            password: hashedPassword
-        };
-        
-        // Write back to file
+        if (!currentConfig.authentication) {
+            currentConfig.authentication = {};
+        }
+        currentConfig.authentication.username = username;
+        currentConfig.authentication.password_hash = hashedPassword;
         fs.writeFileSync(configPath, JSON.stringify(currentConfig, null, 4));
-        
-        // Update runtime config
-        config.auth = currentConfig.auth;
-        
+        config.authentication = currentConfig.authentication;
         return { success: true };
     } catch (error) {
         console.error('Failed to update admin credentials:', error);
