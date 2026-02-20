@@ -7,9 +7,9 @@
     <link rel="manifest" href="/manifest.json">
     <link rel="apple-touch-icon" href="/icon-192x192.png">
     <title><%= site.title %></title>
-    <!-- Gunakan CDN untuk memastikan Leaflet dan HLS.js tersedia -->
-    <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.7/dist/hls.min.js"></script>
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- HLS.js dan Leaflet.js -->
+    <script src="public/js/hls.min.js"></script>
+    <script src="public/js/leaflet.js"></script>
     <style>
         /* ===== RESET & BASE ===== */
         * {
@@ -24,10 +24,8 @@
             line-height: 1.5;
             min-height: 100vh;
         }
-        a {
-            color: inherit;
-            text-decoration: none;
-        }
+        a { color: inherit; text-decoration: none; }
+
         /* ===== LAYOUT UTILITY ===== */
         .container {
             width: 100%;
@@ -89,6 +87,7 @@
         .h-5 { height: 1.25rem; }
         .h-6 { height: 1.5rem; }
         .h-8 { height: 2rem; }
+        .h-auto { height: auto; }
         .min-h-screen { min-height: 100vh; }
 
         .rounded-full { border-radius: 9999px; }
@@ -118,7 +117,7 @@
         .bg-green-500 { background-color: #10b981; }
         .bg-purple-500 { background-color: #a855f7; }
         .bg-black { background-color: #000000; }
-        .bg-opacity-60 { --bg-opacity: 0.6; background-color: rgba(0,0,0,0.6); }
+        .bg-opacity-60 { background-color: rgba(0,0,0,0.6); }
 
         .text-white { color: #ffffff; }
         .text-red-500 { color: #ef4444; }
@@ -142,11 +141,7 @@
         .font-bold { font-weight: 700; }
         .uppercase { text-transform: uppercase; }
         .tracking-wider { letter-spacing: 0.05em; }
-        .truncate {
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
+        .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .text-center { text-align: center; }
         .text-right { text-align: right; }
         .italic { font-style: italic; }
@@ -174,7 +169,7 @@
         .pointer-events-none { pointer-events: none; }
 
         .overflow-hidden { overflow: hidden; }
-        .object-cover { object-fit: cover; }
+        .object-contain { object-fit: contain; } /* Menampilkan video utuh tanpa cropping */
         .whitespace-nowrap { white-space: nowrap; }
 
         /* Animasi */
@@ -188,22 +183,6 @@
             50%{opacity:.5;}
         }
         .animate-pulse { animation: pulse 2s cubic-bezier(0.4,0,0.6,1) infinite; }
-
-        /* ===== ASPEK RATIO VIDEO ===== */
-        .aspect-video {
-            position: relative;
-            width: 100%;
-            padding-bottom: 56.25%; /* 16:9 */
-        }
-        .aspect-video video,
-        .aspect-video iframe,
-        .aspect-video .video-content {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-        }
 
         /* ===== MARQUEE (merah) ===== */
         .running-text-container {
@@ -266,502 +245,17 @@
             to { opacity: 1; }
         }
 
-        /* ===== LEAFlet CSS (diambil dari file leaflet.css yang diberikan) ===== */
-        /* required styles */
-        .leaflet-pane,
-        .leaflet-tile,
-        .leaflet-marker-icon,
-        .leaflet-marker-shadow,
-        .leaflet-tile-container,
-        .leaflet-pane > svg,
-        .leaflet-pane > canvas,
-        .leaflet-zoom-box,
-        .leaflet-image-layer,
-        .leaflet-layer {
-            position: absolute;
-            left: 0;
-            top: 0;
-        }
-        .leaflet-container {
-            overflow: hidden;
-        }
-        .leaflet-tile,
-        .leaflet-marker-icon,
-        .leaflet-marker-shadow {
-            -webkit-user-select: none;
-               -moz-user-select: none;
-                    user-select: none;
-              -webkit-user-drag: none;
-        }
-        .leaflet-tile::selection {
-            background: transparent;
-        }
-        .leaflet-safari .leaflet-tile {
-            image-rendering: -webkit-optimize-contrast;
-        }
-        .leaflet-safari .leaflet-tile-container {
-            width: 1600px;
-            height: 1600px;
-            -webkit-transform-origin: 0 0;
-        }
-        .leaflet-marker-icon,
-        .leaflet-marker-shadow {
-            display: block;
-        }
-        .leaflet-container .leaflet-overlay-pane svg {
-            max-width: none !important;
-            max-height: none !important;
-        }
-        .leaflet-container .leaflet-marker-pane img,
-        .leaflet-container .leaflet-shadow-pane img,
-        .leaflet-container .leaflet-tile-pane img,
-        .leaflet-container img.leaflet-image-layer,
-        .leaflet-container .leaflet-tile {
-            max-width: none !important;
-            max-height: none !important;
-            width: auto;
-            padding: 0;
-        }
-        .leaflet-container img.leaflet-tile {
-            mix-blend-mode: plus-lighter;
-        }
-        .leaflet-container.leaflet-touch-zoom {
-            -ms-touch-action: pan-x pan-y;
-            touch-action: pan-x pan-y;
-        }
-        .leaflet-container.leaflet-touch-drag {
-            -ms-touch-action: pinch-zoom;
-            touch-action: none;
-            touch-action: pinch-zoom;
-        }
-        .leaflet-container.leaflet-touch-drag.leaflet-touch-zoom {
-            -ms-touch-action: none;
-            touch-action: none;
-        }
-        .leaflet-container {
-            -webkit-tap-highlight-color: transparent;
-        }
-        .leaflet-container a {
-            -webkit-tap-highlight-color: rgba(51,181,229,0.4);
-        }
-        .leaflet-tile {
-            filter: inherit;
-            visibility: hidden;
-        }
-        .leaflet-tile-loaded {
-            visibility: inherit;
-        }
-        .leaflet-zoom-box {
-            width: 0;
-            height: 0;
-            box-sizing: border-box;
-            z-index: 800;
-        }
-        .leaflet-overlay-pane svg {
-            -moz-user-select: none;
-        }
-        .leaflet-pane         { z-index: 400; }
-        .leaflet-tile-pane    { z-index: 200; }
-        .leaflet-overlay-pane { z-index: 400; }
-        .leaflet-shadow-pane  { z-index: 500; }
-        .leaflet-marker-pane  { z-index: 600; }
-        .leaflet-tooltip-pane   { z-index: 650; }
-        .leaflet-popup-pane   { z-index: 700; }
-        .leaflet-map-pane canvas { z-index: 100; }
-        .leaflet-map-pane svg    { z-index: 200; }
-        .leaflet-vml-shape {
-            width: 1px;
-            height: 1px;
-        }
-        .lvml {
-            behavior: url(#default#VML);
-            display: inline-block;
-            position: absolute;
-        }
-        .leaflet-control {
+        /* Kontainer video tanpa height tetap, akan diatur JS */
+        .video-container {
             position: relative;
-            z-index: 800;
-            pointer-events: visiblePainted;
-            pointer-events: auto;
+            width: 100%;
+            background-color: #1f2937; /* warna latar saat loading */
         }
-        .leaflet-top,
-        .leaflet-bottom {
-            position: absolute;
-            z-index: 1000;
-            pointer-events: none;
-        }
-        .leaflet-top { top: 0; }
-        .leaflet-right { right: 0; }
-        .leaflet-bottom { bottom: 0; }
-        .leaflet-left { left: 0; }
-        .leaflet-control {
-            float: left;
-            clear: both;
-        }
-        .leaflet-right .leaflet-control { float: right; }
-        .leaflet-top .leaflet-control { margin-top: 10px; }
-        .leaflet-bottom .leaflet-control { margin-bottom: 10px; }
-        .leaflet-left .leaflet-control { margin-left: 10px; }
-        .leaflet-right .leaflet-control { margin-right: 10px; }
-        .leaflet-fade-anim .leaflet-popup {
-            opacity: 0;
-            transition: opacity 0.2s linear;
-        }
-        .leaflet-fade-anim .leaflet-map-pane .leaflet-popup { opacity: 1; }
-        .leaflet-zoom-animated {
-            transform-origin: 0 0;
-        }
-        svg.leaflet-zoom-animated { will-change: transform; }
-        .leaflet-zoom-anim .leaflet-zoom-animated {
-            transition: transform 0.25s cubic-bezier(0,0,0.25,1);
-        }
-        .leaflet-zoom-anim .leaflet-tile,
-        .leaflet-pan-anim .leaflet-tile { transition: none; }
-        .leaflet-zoom-anim .leaflet-zoom-hide { visibility: hidden; }
-        .leaflet-interactive { cursor: pointer; }
-        .leaflet-grab {
-            cursor: -webkit-grab;
-            cursor: -moz-grab;
-            cursor: grab;
-        }
-        .leaflet-crosshair,
-        .leaflet-crosshair .leaflet-interactive { cursor: crosshair; }
-        .leaflet-popup-pane,
-        .leaflet-control { cursor: auto; }
-        .leaflet-dragging .leaflet-grab,
-        .leaflet-dragging .leaflet-grab .leaflet-interactive,
-        .leaflet-dragging .leaflet-marker-draggable {
-            cursor: move;
-            cursor: -webkit-grabbing;
-            cursor: -moz-grabbing;
-            cursor: grabbing;
-        }
-        .leaflet-marker-icon,
-        .leaflet-marker-shadow,
-        .leaflet-image-layer,
-        .leaflet-pane > svg path,
-        .leaflet-tile-container { pointer-events: none; }
-        .leaflet-marker-icon.leaflet-interactive,
-        .leaflet-image-layer.leaflet-interactive,
-        .leaflet-pane > svg path.leaflet-interactive,
-        svg.leaflet-image-layer.leaflet-interactive path {
-            pointer-events: visiblePainted;
-            pointer-events: auto;
-        }
-        .leaflet-container {
-            background: #ddd;
-            outline-offset: 1px;
-        }
-        .leaflet-container a { color: #0078A8; }
-        .leaflet-zoom-box {
-            border: 2px dotted #38f;
-            background: rgba(255,255,255,0.5);
-        }
-        .leaflet-container {
-            font-family: "Helvetica Neue", Arial, Helvetica, sans-serif;
-            font-size: 12px;
-            font-size: 0.75rem;
-            line-height: 1.5;
-        }
-        .leaflet-bar {
-            box-shadow: 0 1px 5px rgba(0,0,0,0.65);
-            border-radius: 4px;
-        }
-        .leaflet-bar a {
-            background-color: #fff;
-            border-bottom: 1px solid #ccc;
-            width: 26px;
-            height: 26px;
-            line-height: 26px;
+        .video-container video {
             display: block;
-            text-align: center;
-            text-decoration: none;
-            color: black;
-        }
-        .leaflet-bar a,
-        .leaflet-control-layers-toggle {
-            background-position: 50% 50%;
-            background-repeat: no-repeat;
-            display: block;
-        }
-        .leaflet-bar a:hover,
-        .leaflet-bar a:focus { background-color: #f4f4f4; }
-        .leaflet-bar a:first-child {
-            border-top-left-radius: 4px;
-            border-top-right-radius: 4px;
-        }
-        .leaflet-bar a:last-child {
-            border-bottom-left-radius: 4px;
-            border-bottom-right-radius: 4px;
-            border-bottom: none;
-        }
-        .leaflet-bar a.leaflet-disabled {
-            cursor: default;
-            background-color: #f4f4f4;
-            color: #bbb;
-        }
-        .leaflet-touch .leaflet-bar a {
-            width: 30px;
-            height: 30px;
-            line-height: 30px;
-        }
-        .leaflet-touch .leaflet-bar a:first-child {
-            border-top-left-radius: 2px;
-            border-top-right-radius: 2px;
-        }
-        .leaflet-touch .leaflet-bar a:last-child {
-            border-bottom-left-radius: 2px;
-            border-bottom-right-radius: 2px;
-        }
-        .leaflet-control-zoom-in,
-        .leaflet-control-zoom-out {
-            font: bold 18px 'Lucida Console', Monaco, monospace;
-            text-indent: 1px;
-        }
-        .leaflet-touch .leaflet-control-zoom-in,
-        .leaflet-touch .leaflet-control-zoom-out { font-size: 22px; }
-        .leaflet-control-layers {
-            box-shadow: 0 1px 5px rgba(0,0,0,0.4);
-            background: #fff;
-            border-radius: 5px;
-        }
-        .leaflet-control-layers-toggle {
-            background-image: url(images/layers.png);
-            width: 36px;
-            height: 36px;
-        }
-        .leaflet-retina .leaflet-control-layers-toggle {
-            background-image: url(images/layers-2x.png);
-            background-size: 26px 26px;
-        }
-        .leaflet-touch .leaflet-control-layers-toggle {
-            width: 44px;
-            height: 44px;
-        }
-        .leaflet-control-layers .leaflet-control-layers-list,
-        .leaflet-control-layers-expanded .leaflet-control-layers-toggle { display: none; }
-        .leaflet-control-layers-expanded .leaflet-control-layers-list {
-            display: block;
-            position: relative;
-        }
-        .leaflet-control-layers-expanded {
-            padding: 6px 10px 6px 6px;
-            color: #333;
-            background: #fff;
-        }
-        .leaflet-control-layers-scrollbar {
-            overflow-y: scroll;
-            overflow-x: hidden;
-            padding-right: 5px;
-        }
-        .leaflet-control-layers-selector {
-            margin-top: 2px;
-            position: relative;
-            top: 1px;
-        }
-        .leaflet-control-layers label {
-            display: block;
-            font-size: 13px;
-            font-size: 1.08333em;
-        }
-        .leaflet-control-layers-separator {
-            height: 0;
-            border-top: 1px solid #ddd;
-            margin: 5px -10px 5px -6px;
-        }
-        .leaflet-default-icon-path {
-            background-image: url(images/marker-icon.png);
-        }
-        .leaflet-container .leaflet-control-attribution {
-            background: #fff;
-            background: rgba(255,255,255,0.8);
-            margin: 0;
-        }
-        .leaflet-control-attribution,
-        .leaflet-control-scale-line {
-            padding: 0 5px;
-            color: #333;
-            line-height: 1.4;
-        }
-        .leaflet-control-attribution a { text-decoration: none; }
-        .leaflet-control-attribution a:hover,
-        .leaflet-control-attribution a:focus { text-decoration: underline; }
-        .leaflet-attribution-flag {
-            display: inline !important;
-            vertical-align: baseline !important;
-            width: 1em;
-            height: 0.6669em;
-        }
-        .leaflet-left .leaflet-control-scale { margin-left: 5px; }
-        .leaflet-bottom .leaflet-control-scale { margin-bottom: 5px; }
-        .leaflet-control-scale-line {
-            border: 2px solid #777;
-            border-top: none;
-            line-height: 1.1;
-            padding: 2px 5px 1px;
-            white-space: nowrap;
-            box-sizing: border-box;
-            background: rgba(255,255,255,0.8);
-            text-shadow: 1px 1px #fff;
-        }
-        .leaflet-control-scale-line:not(:first-child) {
-            border-top: 2px solid #777;
-            border-bottom: none;
-            margin-top: -2px;
-        }
-        .leaflet-control-scale-line:not(:first-child):not(:last-child) {
-            border-bottom: 2px solid #777;
-        }
-        .leaflet-touch .leaflet-control-attribution,
-        .leaflet-touch .leaflet-control-layers,
-        .leaflet-touch .leaflet-bar { box-shadow: none; }
-        .leaflet-touch .leaflet-control-layers,
-        .leaflet-touch .leaflet-bar {
-            border: 2px solid rgba(0,0,0,0.2);
-            background-clip: padding-box;
-        }
-        .leaflet-popup {
-            position: absolute;
-            text-align: center;
-            margin-bottom: 20px;
-        }
-        .leaflet-popup-content-wrapper {
-            padding: 1px;
-            text-align: left;
-            border-radius: 12px;
-        }
-        .leaflet-popup-content {
-            margin: 13px 24px 13px 20px;
-            line-height: 1.3;
-            font-size: 13px;
-            font-size: 1.08333em;
-            min-height: 1px;
-        }
-        .leaflet-popup-content p { margin: 17px 0; margin: 1.3em 0; }
-        .leaflet-popup-tip-container {
-            width: 40px;
-            height: 20px;
-            position: absolute;
-            left: 50%;
-            margin-top: -1px;
-            margin-left: -20px;
-            overflow: hidden;
-            pointer-events: none;
-        }
-        .leaflet-popup-tip {
-            width: 17px;
-            height: 17px;
-            padding: 1px;
-            margin: -10px auto 0;
-            pointer-events: auto;
-            transform: rotate(45deg);
-        }
-        .leaflet-popup-content-wrapper,
-        .leaflet-popup-tip {
-            background: white;
-            color: #333;
-            box-shadow: 0 3px 14px rgba(0,0,0,0.4);
-        }
-        .leaflet-container a.leaflet-popup-close-button {
-            position: absolute;
-            top: 0;
-            right: 0;
-            border: none;
-            text-align: center;
-            width: 24px;
-            height: 24px;
-            font: 16px/24px Tahoma, Verdana, sans-serif;
-            color: #757575;
-            text-decoration: none;
-            background: transparent;
-        }
-        .leaflet-container a.leaflet-popup-close-button:hover,
-        .leaflet-container a.leaflet-popup-close-button:focus { color: #585858; }
-        .leaflet-popup-scrolled { overflow: auto; }
-        .leaflet-oldie .leaflet-popup-content-wrapper { -ms-zoom: 1; }
-        .leaflet-oldie .leaflet-popup-tip {
-            width: 24px;
-            margin: 0 auto;
-            -ms-filter: "progid:DXImageTransform.Microsoft.Matrix(M11=0.70710678, M12=0.70710678, M21=-0.70710678, M22=0.70710678)";
-            filter: progid:DXImageTransform.Microsoft.Matrix(M11=0.70710678, M12=0.70710678, M21=-0.70710678, M22=0.70710678);
-        }
-        .leaflet-oldie .leaflet-control-zoom,
-        .leaflet-oldie .leaflet-control-layers,
-        .leaflet-oldie .leaflet-popup-content-wrapper,
-        .leaflet-oldie .leaflet-popup-tip { border: 1px solid #999; }
-        .leaflet-div-icon {
-            background: #fff;
-            border: 1px solid #666;
-        }
-        .leaflet-tooltip {
-            position: absolute;
-            padding: 6px;
-            background-color: #fff;
-            border: 1px solid #fff;
-            border-radius: 3px;
-            color: #222;
-            white-space: nowrap;
-            -webkit-user-select: none;
-            -moz-user-select: none;
-            -ms-user-select: none;
-            user-select: none;
-            pointer-events: none;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.4);
-        }
-        .leaflet-tooltip.leaflet-interactive {
-            cursor: pointer;
-            pointer-events: auto;
-        }
-        .leaflet-tooltip-top:before,
-        .leaflet-tooltip-bottom:before,
-        .leaflet-tooltip-left:before,
-        .leaflet-tooltip-right:before {
-            position: absolute;
-            pointer-events: none;
-            border: 6px solid transparent;
-            background: transparent;
-            content: "";
-        }
-        .leaflet-tooltip-bottom { margin-top: 6px; }
-        .leaflet-tooltip-top { margin-top: -6px; }
-        .leaflet-tooltip-bottom:before,
-        .leaflet-tooltip-top:before {
-            left: 50%;
-            margin-left: -6px;
-        }
-        .leaflet-tooltip-top:before {
-            bottom: 0;
-            margin-bottom: -12px;
-            border-top-color: #fff;
-        }
-        .leaflet-tooltip-bottom:before {
-            top: 0;
-            margin-top: -12px;
-            margin-left: -6px;
-            border-bottom-color: #fff;
-        }
-        .leaflet-tooltip-left { margin-left: -6px; }
-        .leaflet-tooltip-right { margin-left: 6px; }
-        .leaflet-tooltip-left:before,
-        .leaflet-tooltip-right:before {
-            top: 50%;
-            margin-top: -6px;
-        }
-        .leaflet-tooltip-left:before {
-            right: 0;
-            margin-right: -12px;
-            border-left-color: #fff;
-        }
-        .leaflet-tooltip-right:before {
-            left: 0;
-            margin-left: -12px;
-            border-right-color: #fff;
-        }
-        @media print {
-            .leaflet-control {
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
-            }
+            width: 100%;
+            height: 100%; /* akan mengikuti container setelah container memiliki height */
+            object-fit: contain;
         }
     </style>
 </head>
@@ -776,7 +270,6 @@
                 <span class="truncate"><%= site.title %></span>
             </h1>
             <div class="flex items-center gap-4">
-                <!-- Weather widget -->
                 <div id="weather-widget" class="flex items-center gap-2 text-gray-700 text-sm font-medium bg-red-50 px-3 py-1.5 rounded-full shadow-sm border border-red-200">
                     <span id="weather-icon" class="text-lg md:text-xl">🌤️</span>
                     <span id="weather-temp">--°C</span>
@@ -845,8 +338,10 @@
                         <span class="text-[10px] text-gray-500 block"><%= camera.lokasi || 'Unknown' %></span>
                     </div>
                 </div>
-                <div id="cam-container-<%= camera.id %>" class="relative w-full aspect-video bg-gray-800 group">
-                    <video id="video-<%= camera.id %>" class="absolute top-0 left-0 w-full h-full object-cover" controls autoplay muted playsinline crossorigin="anonymous"></video>
+                <!-- Kontainer video tanpa height tetap, akan diatur oleh JS -->
+                <div id="cam-container-<%= camera.id %>" class="video-container relative bg-gray-800">
+                    <video id="video-<%= camera.id %>" class="w-full h-full object-contain" controls autoplay muted playsinline crossorigin="anonymous"></video>
+                    <!-- Tombol Fullscreen dan Snapshot tetap -->
                     <button onclick="toggleCamFullscreen('cam-container-<%= camera.id %>', 'video-<%= camera.id %>')" class="cam-action-btn absolute top-2 left-2 bg-gray-700 hover:bg-gray-600 text-white p-2.5 rounded-full shadow-lg opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300 z-10 flex items-center justify-center" title="Fullscreen">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4m-4 0l5 5m5-5l-5 5M4 16v4m0 0h4m-4 0l5-5m-5 5l5-5m-5 5v-4m0 4h-4"></path>
@@ -868,6 +363,7 @@
             <script>
                 (function(){
                     var video = document.getElementById('video-<%= camera.id %>');
+                    var container = document.getElementById('cam-container-<%= camera.id %>');
                     var overlay = document.getElementById('cam-overlay-<%= camera.id %>');
                     var overlayText = document.getElementById('cam-overlay-text-<%= camera.id %>');
                     var baseUrl = '<%= mediamtx.public_hls_url %>' || (window.location.protocol + '//' + window.location.hostname + ':<%= hls_port %>');
@@ -877,6 +373,30 @@
                     var connectTimeout = null;
                     var retryCount = 0;
                     var maxRetries = 3;
+
+                    // Fungsi untuk menyesuaikan tinggi container berdasarkan rasio video
+                    function adjustContainerHeight() {
+                        if (!video || !container) return;
+                        // Pastikan video memiliki dimensi
+                        if (video.videoWidth && video.videoHeight) {
+                            var aspectRatio = video.videoWidth / video.videoHeight;
+                            var containerWidth = container.offsetWidth;
+                            if (containerWidth > 0) {
+                                var newHeight = containerWidth / aspectRatio;
+                                container.style.height = newHeight + 'px';
+                            }
+                        }
+                    }
+
+                    // Panggil setelah video siap
+                    video.addEventListener('loadedmetadata', function() {
+                        adjustContainerHeight();
+                    });
+
+                    // Panggil juga saat ukuran container berubah (misal resize layar)
+                    window.addEventListener('resize', function() {
+                        adjustContainerHeight();
+                    });
 
                     function setOverlay(visible, message) {
                         if (!overlay) return;
@@ -898,7 +418,10 @@
                             var hls = new Hls({ debug: false, lowLatencyMode: true, manifestLoadingTimeOut: 5000, manifestLoadingMaxRetry: 2, manifestLoadingRetryDelay: 1000 });
                             hls.loadSource(src);
                             hls.attachMedia(video);
-                            hls.on(Hls.Events.MANIFEST_PARSED, function() { video.play().catch(e => console.log('Autoplay blocked', e)); });
+                            hls.on(Hls.Events.MANIFEST_PARSED, function() { 
+                                video.play().catch(e => console.log('Autoplay blocked', e));
+                                // Metadata mungkin belum langsung, loadedmetadata akan memicu adjust
+                            });
                             if (!video._overlayPlayingBound) {
                                 video.addEventListener('playing', function() {
                                     if (connectTimeout) { clearTimeout(connectTimeout); connectTimeout = null; }
@@ -941,7 +464,11 @@
                             if (connectTimeout) { clearTimeout(connectTimeout); connectTimeout = null; }
                             setOverlay(true, 'Menghubungkan ke stream...');
                             video.src = fallbackSrc;
-                            video.addEventListener('loadedmetadata', function() { setOverlay(false); video.play(); });
+                            video.addEventListener('loadedmetadata', function() { 
+                                setOverlay(false); 
+                                video.play();
+                                adjustContainerHeight();
+                            });
                         }
                     }
                     initHls(transcodedSrc);
@@ -1121,31 +648,25 @@
                 btnGrid.classList.remove('view-active');
                 btnGrid.classList.add('text-gray-500');
 
-                // Pastikan map diinisialisasi setelah elemen terlihat
-                setTimeout(() => {
-                    if (!mapInitialized) {
+                if (!mapInitialized) {
+                    setTimeout(() => {
                         initMap();
                         mapInitialized = true;
-                    } else {
-                        map.invalidateSize();
-                    }
-                }, 200);
+                    }, 100);
+                } else {
+                    setTimeout(() => map.invalidateSize(), 100);
+                }
             }
         }
 
         // Map initialization
         function initMap() {
-            // Cek apakah Leaflet tersedia
             if (typeof L === 'undefined') {
-                console.error('Leaflet tidak tersedia. Pastikan script leaflet.js dimuat.');
+                console.error('Leaflet tidak tersedia');
                 return;
             }
 
-            // Pastikan elemen map ada
-            const mapElement = document.getElementById('map');
-            if (!mapElement) return;
-
-            // Hapus icon default path untuk menghindari error
+            // Hapus icon default path
             delete L.Icon.Default.prototype._getIconUrl;
             L.Icon.Default.mergeOptions({
                 iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
@@ -1153,7 +674,7 @@
                 shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
             });
 
-            let center = [-6.2088, 106.8456]; // Jakarta
+            let center = [-6.2088, 106.8456];
             const validCam = camerasData.find(c => c.lat && c.lng);
             if (validCam) center = [validCam.lat, validCam.lng];
 
@@ -1167,12 +688,13 @@
             camerasData.forEach(cam => {
                 if (!cam.lat || !cam.lng) return;
                 const marker = L.marker([cam.lat, cam.lng]).addTo(map);
+                // Popup dengan video, kontainer tanpa height tetap
                 const popupContent = `
                     <div style="width:300px;">
                         <h3 class="font-bold text-lg mb-2">${cam.nama}</h3>
                         <p class="text-xs text-gray-500 mb-2">${cam.lokasi || ''}</p>
-                        <div class="relative w-full aspect-video bg-black rounded overflow-hidden">
-                            <video id="map-video-${cam.id}" class="absolute top-0 left-0 w-full h-full object-cover" controls autoplay muted playsinline></video>
+                        <div id="map-container-${cam.id}" class="video-container relative bg-gray-800" style="width:100%;">
+                            <video id="map-video-${cam.id}" class="w-full h-full object-contain" controls autoplay muted playsinline></video>
                         </div>
                     </div>
                 `;
@@ -1181,7 +703,24 @@
 
                 marker.on('popupopen', () => {
                     const video = document.getElementById(`map-video-${cam.id}`);
+                    const container = document.getElementById(`map-container-${cam.id}`);
                     if (!video) return;
+
+                    // Fungsi adjust tinggi
+                    function adjustMapContainerHeight() {
+                        if (!video || !container) return;
+                        if (video.videoWidth && video.videoHeight) {
+                            var aspectRatio = video.videoWidth / video.videoHeight;
+                            var containerWidth = container.offsetWidth;
+                            if (containerWidth > 0) {
+                                container.style.height = (containerWidth / aspectRatio) + 'px';
+                            }
+                        }
+                    }
+
+                    video.addEventListener('loadedmetadata', adjustMapContainerHeight);
+                    window.addEventListener('resize', adjustMapContainerHeight);
+
                     const publicHlsUrl = '<%= mediamtx.public_hls_url %>';
                     const baseUrl = publicHlsUrl || (window.location.protocol + '//' + window.location.hostname + ':' + hlsPort);
                     const transcodedSrc = baseUrl + '/cam_' + cam.id + '/index.m3u8';
