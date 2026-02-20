@@ -1,0 +1,280 @@
+#!/bin/bash
+
+# CCTV Monitoring System - Auto Installer
+# Optimized for Ubuntu/Debian and Orange Pi/Raspberry Pi (Armbian)
+
+echo "=== INITIALIZING INSTALLATION ==="
+set -e # Stop on error
+
+# --- 1. Fix Broken Repositories ---
+echo "Checking for broken repositories..."
+if [ -f /etc/apt/sources.list.d/armbian.list ] || [ -f /etc/apt/sources.list ]; then
+    sudo sed -i 's/.*bullseye-backports.*/# &/' /etc/apt/sources.list 2>/dev/null || true
+    sudo sed -i 's/.*bullseye-backports.*/# &/' /etc/apt/sources.list.d/*.list 2>/dev/null || true
+fi
+
+# --- 2. Install Dependencies ---
+echo "Updating system and installing dependencies..."
+sudo apt-get update -y || echo "Warning: apt update had some errors, continuing..."
+sudo apt-get install -y curl wget git ffmpeg build-essential sqlite3 ufw
+
+# --- 3. Install Node.js LTS (v20) ---
+if ! command -v node &> /dev/null; then
+    echo "Installing Node.js LTS..."
+    curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+    sudo apt-get install -y nodejs
+fi
+
+# --- 4. Install MediaMTX ---
+ARCH=$(uname -m)
+if [ "$ARCH" = "x86_64" ]; then
+    MEDIAMTX_ARCH="linux_amd64"
+elif [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
+    MEDIAMTX_ARCH="linux_arm64"
+else
+    MEDIAMTX_ARCH="linux_armv7"   
+fi
+
+VERSION="v1.16.1"
+if [ ! -f "mediamtx" ]; then
+    echo "Downloading MediaMTX $VERSION for $ARCH..."
+    DOWNLOAD_URL="https://github.com/bluenviron/mediamtx/releases/download/${VERSION}/mediamtx_${VERSION}_${MEDIAMTX_ARCH}.tar.gz"
+    wget -O mediamtx.tar.gz "$DOWNLOAD_URL"
+    tar -xvzf mediamtx.tar.gz mediamtx mediamtx.yml
+    rm mediamtx.tar.gz
+    chmod +x mediamtx
+fi
+
+# --- 5. Create Supporting Scripts (Clean Bash Format) ---
+echo "Generating supporting scripts..."
+FULL_PATH=$(pwd)
+
+cat << 'EOF' > smart_transcode.sh
+#!/bin/bash
+
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+LOG_FILE="$SCRIPT_DIR/smart_transcode.log"
+echo "[$(date)] --- Processing: $MTX_PATH ---" >> "$LOG_FILE"
+
+# Only process streams ending in _input
+if [[ "$MTX_PATH" != *"_input"* ]]; then
+    exit 0
+fi
+
+# Read recording settings from config.json with fallback values
+CONFIG_FILE="$SCRIPT_DIR/config.json"
+
+# Helper function to parse JSON value (supports strings and numbers)
+get_config_value() {
+    local key="$1"
+    local default="$2"
+    if [ -f "$CONFIG_FILE" ]; then
+        # Try matching string value first: "key": "value"
+        local value=$(grep -o "\"$key\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" "$CONFIG_FILE" | cut -d'"' -f4)
+        
+        # If empty, try matching number/boolean value: "key": 123 or "key": true
+        if [ -z "$value" ]; then
+            value=$(grep -o "\"$key\"[[:space:]]*:[[:space:]]*[^,}]*" "$CONFIG_FILE" | cut -d':' -f2 | tr -d ' "')
+        fi
+        
+        if [ -n "$value" ]; then
+            echo "$value"
+        else
+            echo "$default"
+        fi
+    else
+        echo "$default"
+    fi
+}
+
+# Get RTSP port from config or default to 8555
+RTSP_PORT=$(get_config_value "rtsp_port" "8555")
+if [ -z "$RTSP_PORT" ]; then
+    RTSP_PORT="8555"
+fi
+
+SOURCE_RTSP="rtsp://127.0.0.1:$RTSP_PORT/$MTX_PATH"
+TARGET_NAME="${MTX_PATH/_input/}"
+TARGET_RTSP="rtsp://127.0.0.1:$RTSP_PORT/$TARGET_NAME"
+
+VIDEO_CODEC_CONFIG=$(get_config_value "video_codec" "h264")
+RESOLUTION_CONFIG=$(get_config_value "resolution" "720p")
+VIDEO_BITRATE_CONFIG=$(get_config_value "bitrate" "800k")
+MAX_VIDEO_BITRATE_CONFIG=$(get_config_value "max_bitrate" "900k")
+VIDEO_FPS_CONFIG=$(get_config_value "frame_rate" "12")
+AUDIO_ENABLED_CONFIG=$(get_config_value "audio_enabled" "true")
+AUDIO_BITRATE_CONFIG=$(get_config_value "audio_bitrate" "64k")
+
+# Map resolution to FFmpeg resolution
+case "$RESOLUTION_CONFIG" in
+    "720p") RESOLUTION="1280:720" ;;
+    "1080p") RESOLUTION="1920:1080" ;;
+    "D1") RESOLUTION="720:480" ;;
+    *) RESOLUTION="1280:720" ;;
+esac
+
+# Global tunable parameters from config
+VIDEO_BITRATE="$VIDEO_BITRATE_CONFIG"
+MAX_VIDEO_BITRATE="$MAX_VIDEO_BITRATE_CONFIG"
+VIDEO_BUF_SIZE="1600k"
+VIDEO_FPS="$VIDEO_FPS_CONFIG"
+GOP_SIZE=$((VIDEO_FPS * 2))
+ENC_THREADS=1
+
+sleep 2
+
+VIDEO_CODEC=$(
+  ffprobe -v error -rtsp_transport tcp -select_streams v:0 \
+    -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 \
+    "$SOURCE_RTSP" 2>/dev/null | head -n1 | tr -d '\r\n'
+)
+echo "[$(date)] Detected video codec: '$VIDEO_CODEC'" >> "$LOG_FILE"
+echo "[$(date)] Config codec: '$VIDEO_CODEC_CONFIG', Resolution: '$RESOLUTION_CONFIG', FPS: $VIDEO_FPS, Bitrate: $VIDEO_BITRATE" >> "$LOG_FILE"
+
+# Build FFmpeg command
+FFMPEG_CMD="ffmpeg -hide_banner -loglevel error -rtsp_transport tcp -i \"$SOURCE_RTSP\""
+
+# Video codec
+if [ "$VIDEO_CODEC_CONFIG" = "h265" ] || [ "$VIDEO_CODEC_CONFIG" = "hevc" ]; then
+    FFMPEG_CMD="$FFMPEG_CMD -c:v libx265 -preset ultrafast -tune zerolatency -profile:v main"
+else
+    FFMPEG_CMD="$FFMPEG_CMD -c:v libx264 -preset ultrafast -tune zerolatency -profile:v main -level 4.0 -pix_fmt yuv420p"
+fi
+
+# Video settings
+FFMPEG_CMD="$FFMPEG_CMD -s \"$RESOLUTION\" -b:v \"$VIDEO_BITRATE\" -maxrate \"$MAX_VIDEO_BITRATE\" -bufsize \"$VIDEO_BUF_SIZE\""
+FFMPEG_CMD="$FFMPEG_CMD -r \"$VIDEO_FPS\" -g \"$GOP_SIZE\" -threads \"$ENC_THREADS\""
+
+# Audio settings
+if [ "$AUDIO_ENABLED_CONFIG" = "true" ]; then
+    FFMPEG_CMD="$FFMPEG_CMD -c:a aac -ac 1 -ar 44100 -b:a \"$AUDIO_BITRATE_CONFIG\""
+fi
+
+# Output
+FFMPEG_CMD="$FFMPEG_CMD -f rtsp -rtsp_transport tcp \"$TARGET_RTSP\""
+
+echo "[$(date)] Transcoding $MTX_PATH with codec: $VIDEO_CODEC_CONFIG, resolution: $RESOLUTION, fps: $VIDEO_FPS, bitrate: $VIDEO_BITRATE..." >> "$LOG_FILE"
+eval $FFMPEG_CMD >> "$LOG_FILE" 2>&1
+EOF
+
+cat << 'EOF' > record_notify.sh
+#!/bin/bash
+# Logic to notify web-app about new recording
+curl -X POST -H "Content-Type: application/json" -d "{\"path\":\"$MTX_PATH\", \"file\":\"$MTX_SEGMENT_PATH\"}" http://localhost:3003/api/recordings/notify
+EOF
+
+chmod +x smart_transcode.sh record_notify.sh
+
+# --- 6. Patching Configuration ---
+# Konfigurasi Port
+# RTSP: 8555
+# RTP: 8100
+# RTCP: 8101
+# RTMP: 1936
+# HLS: 8856
+# WebRTC: 8890
+# WebRTC UDP: 8190
+# API: 9123
+
+echo "🔧 Mengkonfigurasi MediaMTX dengan port custom..."
+cat <<EOF > mediamtx.yml
+paths:
+  all:
+    source: publisher
+
+# RTSP
+rtsp: yes
+rtspTransports: [tcp]
+rtspAddress: :8555
+rtpAddress: :8100
+rtcpAddress: :8101
+
+# RTMP
+rtmpAddress: :1936
+
+# HLS
+hlsAddress: :8856
+hlsVariant: fmp4
+
+# WebRTC
+webrtcAddress: :8890
+webrtcLocalUDPAddress: :8190
+
+# API
+api: yes
+apiAddress: :9123
+EOF
+
+# --- 7. Setup Services ---
+CURRENT_USER=$(whoami)
+sudo bash -c "cat > /etc/systemd/system/mediamtx.service <<EOF
+[Unit]
+Description=MediaMTX Streaming Server
+After=network.target
+
+[Service]
+ExecStart=$FULL_PATH/mediamtx
+WorkingDirectory=$FULL_PATH
+User=$CURRENT_USER
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF"
+
+sudo bash -c "cat > /etc/systemd/system/cctv-web.service <<EOF
+[Unit]
+Description=CCTV Web Monitoring System
+After=network.target mediamtx.service
+
+[Service]
+ExecStart=$(which node || echo /usr/bin/node) $FULL_PATH/index.js
+WorkingDirectory=$FULL_PATH
+User=$CURRENT_USER
+Environment=NODE_ENV=production
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF"
+
+# --- 8. Finalize ---
+echo "Creating recordings directory..."
+mkdir -p recordings
+chmod 777 recordings
+
+npm install --omit=dev --no-audit --no-fund
+
+echo "Configuring firewall..."
+sudo ufw allow 3003/tcp || true
+sudo ufw allow 8555/tcp || true
+sudo ufw allow 8856/tcp || true
+sudo ufw allow 9123/tcp || true
+
+echo "Setting up systemd services..."
+sudo systemctl daemon-reload
+sudo systemctl enable mediamtx cctv-web
+sudo systemctl restart mediamtx cctv-web
+
+# Wait for services to start
+sleep 3
+
+echo "=== INSTALLATION COMPLETE ==="
+IP_ADDR=$(hostname -I | awk '{print $1}')
+echo ""
+echo "🎉 CCTV Monitoring System is ready!"
+echo ""
+echo "📺 Dashboard: http://$IP_ADDR:3003"
+echo "🔐 Default Login: admin / admin123"
+echo ""
+echo "📊 Services Status:"
+systemctl is-active --quiet cctv-web && echo "   ✅ Web App: Running" || echo "   ❌ Web App: Failed (check: journalctl -u cctv-web -n 50)"
+systemctl is-active --quiet mediamtx && echo "   ✅ MediaMTX: Running" || echo "   ❌ MediaMTX: Failed"
+echo ""
+echo "🔧 Configuration:"
+echo "   - HLS Port: 8856 (fMP4 with H265 support)"
+echo "   - RTSP Port: 8555"
+echo "   - Recording: 7 days retention"
+echo ""

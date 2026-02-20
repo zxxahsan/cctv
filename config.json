@@ -1,0 +1,46 @@
+{
+    "server": {
+        "port": 3003,
+        "session_secret": "cctv-secret-key-change-me",
+        "behind_https_proxy": true,
+        "repository_url": "alijayanet/cctv-monitoring"
+    },
+    "authentication": {
+        "username": "admin",
+        "password": "knmpadmin01"
+    },
+    "mediamtx": {
+        "host": "127.0.0.1",
+        "api_port": 9123,
+        "rtsp_port": 8555,
+        "hls_port": 8856,
+        "public_hls_url": "https://sinjai.kampungnelayanmerahputih.com"
+    },
+    "onvif": {
+        "discovery_timeout": 8000
+    },
+    "site": {
+        "title": "KAMPUNG NELAYAN MERAH PUTIH",
+        "footer": "Monitoring System ",
+        "running_text": "Selamat Datang di CCTV Monitoring KAMPUNG NELAYAN MERAH PUTIH"
+    },
+    "recording": {
+        "enabled": false,
+        "start_time": "06:00",
+        "end_time": "23:59",
+        "segment_duration": "60m",
+        "delete_after": "7d",
+        "video_codec": "h264",
+        "resolution": "720p",
+        "frame_rate": 12,
+        "bitrate": "800k",
+        "max_bitrate": "900k",
+        "audio_enabled": true,
+        "audio_bitrate": "64k"
+    },
+    "telegram": {
+        "enabled": false,
+        "bot_token": "",
+        "chat_id": ""
+    }
+}

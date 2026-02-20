@@ -1,0 +1,1248 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#b91c1c">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/icon-192x192.png">
+    <title><%= site.title %></title>
+    <!-- Gunakan CDN untuk memastikan Leaflet dan HLS.js tersedia -->
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.7/dist/hls.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        /* ===== RESET & BASE ===== */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+            background-color: #ffffff;
+            color: #1f2937;
+            line-height: 1.5;
+            min-height: 100vh;
+        }
+        a {
+            color: inherit;
+            text-decoration: none;
+        }
+        /* ===== LAYOUT UTILITY ===== */
+        .container {
+            width: 100%;
+            margin-left: auto;
+            margin-right: auto;
+            padding-left: 1rem;
+            padding-right: 1rem;
+        }
+        @media (min-width: 640px) { .container { max-width: 640px; } }
+        @media (min-width: 768px) { .container { max-width: 768px; } }
+        @media (min-width: 1024px) { .container { max-width: 1024px; } }
+        @media (min-width: 1280px) { .container { max-width: 1280px; } }
+
+        .mx-auto { margin-left: auto; margin-right: auto; }
+        .px-4 { padding-left: 1rem; padding-right: 1rem; }
+        .py-3 { padding-top: 0.75rem; padding-bottom: 0.75rem; }
+        .pb-12 { padding-bottom: 3rem; }
+        .mb-6 { margin-bottom: 1.5rem; }
+        .mt-12 { margin-top: 3rem; }
+        .mb-2 { margin-bottom: 0.5rem; }
+        .mt-2 { margin-top: 0.5rem; }
+
+        .flex { display: flex; }
+        .inline-flex { display: inline-flex; }
+        .items-center { align-items: center; }
+        .justify-between { justify-content: space-between; }
+        .justify-center { justify-content: center; }
+        .gap-2 { gap: 0.5rem; }
+        .gap-3 { gap: 0.75rem; }
+        .gap-4 { gap: 1rem; }
+        .gap-6 { gap: 1.5rem; }
+
+        .grid { display: grid; }
+        .grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)); }
+        @media (min-width: 768px) { .md\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+        @media (min-width: 1024px) { .lg\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+        .hidden { display: none; }
+        .block { display: block; }
+        .relative { position: relative; }
+        .absolute { position: absolute; }
+        .sticky { position: sticky; }
+        .top-0 { top: 0; }
+        .left-0 { left: 0; }
+        .right-0 { right: 0; }
+        .inset-0 { top: 0; right: 0; bottom: 0; left: 0; }
+        .z-10 { z-index: 10; }
+        .z-20 { z-index: 20; }
+        .z-50 { z-index: 50; }
+
+        .w-full { width: 100%; }
+        .w-3 { width: 0.75rem; }
+        .w-4 { width: 1rem; }
+        .w-5 { width: 1.25rem; }
+        .w-6 { width: 1.5rem; }
+        .w-8 { width: 2rem; }
+        .h-3 { height: 0.75rem; }
+        .h-4 { height: 1rem; }
+        .h-5 { height: 1.25rem; }
+        .h-6 { height: 1.5rem; }
+        .h-8 { height: 2rem; }
+        .min-h-screen { min-height: 100vh; }
+
+        .rounded-full { border-radius: 9999px; }
+        .rounded-lg { border-radius: 0.5rem; }
+        .rounded-md { border-radius: 0.375rem; }
+        .border { border-width: 1px; }
+        .border-t { border-top-width: 1px; }
+        .border-b { border-bottom-width: 1px; }
+        .border-red-200 { border-color: #fecaca; }
+        .border-red-300 { border-color: #fca5a5; }
+        .border-red-600 { border-color: #dc2626; }
+        .border-gray-200 { border-color: #e5e7eb; }
+        .border-gray-300 { border-color: #d1d5db; }
+
+        .bg-white { background-color: #ffffff; }
+        .bg-red-50 { background-color: #fef2f2; }
+        .bg-red-100 { background-color: #fee2e2; }
+        .bg-red-500 { background-color: #ef4444; }
+        .bg-red-600 { background-color: #dc2626; }
+        .bg-red-700 { background-color: #b91c1c; }
+        .bg-gray-50 { background-color: #f9fafb; }
+        .bg-gray-100 { background-color: #f3f4f6; }
+        .bg-gray-200 { background-color: #e5e7eb; }
+        .bg-gray-400 { background-color: #9ca3af; }
+        .bg-gray-700 { background-color: #374151; }
+        .bg-gray-800 { background-color: #1f2937; }
+        .bg-green-500 { background-color: #10b981; }
+        .bg-purple-500 { background-color: #a855f7; }
+        .bg-black { background-color: #000000; }
+        .bg-opacity-60 { --bg-opacity: 0.6; background-color: rgba(0,0,0,0.6); }
+
+        .text-white { color: #ffffff; }
+        .text-red-500 { color: #ef4444; }
+        .text-red-600 { color: #dc2626; }
+        .text-red-700 { color: #b91c1c; }
+        .text-gray-400 { color: #9ca3af; }
+        .text-gray-500 { color: #6b7280; }
+        .text-gray-600 { color: #4b5563; }
+        .text-gray-700 { color: #374151; }
+        .text-gray-800 { color: #1f2937; }
+        .text-green-600 { color: #059669; }
+        .text-purple-600 { color: #9333ea; }
+
+        .text-xs { font-size: 0.75rem; }
+        .text-sm { font-size: 0.875rem; }
+        .text-lg { font-size: 1.125rem; }
+        .text-xl { font-size: 1.25rem; }
+        .text-2xl { font-size: 1.5rem; }
+        .font-medium { font-weight: 500; }
+        .font-semibold { font-weight: 600; }
+        .font-bold { font-weight: 700; }
+        .uppercase { text-transform: uppercase; }
+        .tracking-wider { letter-spacing: 0.05em; }
+        .truncate {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .text-center { text-align: center; }
+        .text-right { text-align: right; }
+        .italic { font-style: italic; }
+
+        .shadow-sm { box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05); }
+        .shadow-md { box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06); }
+        .shadow-lg { box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05); }
+        .shadow-xl { box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04); }
+        .shadow-2xl { box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); }
+
+        .transition { transition-property: all; transition-duration: 150ms; }
+        .transition-opacity { transition-property: opacity; transition-duration: 300ms; }
+        .duration-300 { transition-duration: 300ms; }
+        .ease-in-out { transition-timing-function: cubic-bezier(0.4,0,0.2,1); }
+        .hover\:scale-\[1\.01\]:hover { transform: scale(1.01); }
+        .hover\:border-red-400:hover { border-color: #f87171; }
+        .hover\:bg-red-700:hover { background-color: #b91c1c; }
+        .hover\:bg-gray-600:hover { background-color: #4b5563; }
+        .hover\:text-red-600:hover { color: #dc2626; }
+        .hover\:shadow-xl:hover { box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04); }
+        .focus\:outline-none:focus { outline: none; }
+
+        .opacity-0 { opacity: 0; }
+        .opacity-100 { opacity: 1; }
+        .pointer-events-none { pointer-events: none; }
+
+        .overflow-hidden { overflow: hidden; }
+        .object-cover { object-fit: cover; }
+        .whitespace-nowrap { white-space: nowrap; }
+
+        /* Animasi */
+        @keyframes bounce {
+            0%,100%{transform:translateY(0);animation-timing-function:cubic-bezier(0.8,0,1,1);}
+            50%{transform:translateY(-25%);animation-timing-function:cubic-bezier(0,0,0.2,1);}
+        }
+        .animate-bounce { animation: bounce 1s infinite; }
+        @keyframes pulse {
+            0%,100%{opacity:1;}
+            50%{opacity:.5;}
+        }
+        .animate-pulse { animation: pulse 2s cubic-bezier(0.4,0,0.6,1) infinite; }
+
+        /* ===== ASPEK RATIO VIDEO ===== */
+        .aspect-video {
+            position: relative;
+            width: 100%;
+            padding-bottom: 56.25%; /* 16:9 */
+        }
+        .aspect-video video,
+        .aspect-video iframe,
+        .aspect-video .video-content {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* ===== MARQUEE (merah) ===== */
+        .running-text-container {
+            background: linear-gradient(90deg, #b91c1c 0%, #dc2626 100%);
+            color: white;
+            padding: 8px 0;
+            overflow: hidden;
+            white-space: nowrap;
+            position: relative;
+            border-bottom: 1px solid #991b1b;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .running-text-content {
+            display: inline-block;
+            padding-left: 100%;
+            animation: marquee 30s linear infinite;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+        }
+        @keyframes marquee {
+            0% { transform: translate(0,0); }
+            100% { transform: translate(-100%,0); }
+        }
+
+        /* ===== MAP ===== */
+        #map {
+            height: 400px;
+            width: 100%;
+            z-index: 1;
+            margin-bottom: 2rem;
+            border-radius: 0.5rem;
+            border: 1px solid #d1d5db;
+        }
+        @media (min-width: 768px) { #map { height: 600px; } }
+
+        /* ===== CUSTOM ===== */
+        .cam-action-btn {
+            min-width: 44px;
+            min-height: 44px;
+        }
+        .view-active {
+            background-color: #dc2626 !important;
+            color: white !important;
+        }
+        .camera-card {
+            background-color: white;
+            border: 1px solid #e5e7eb;
+            transition: all 0.3s ease;
+        }
+        .camera-card:hover {
+            border-color: #dc2626;
+            box-shadow: 0 10px 25px -5px rgba(220,38,38,0.2);
+            transform: scale(1.01);
+        }
+        .animate-fade-in {
+            animation: fadeIn 0.3s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        /* ===== LEAFlet CSS (diambil dari file leaflet.css yang diberikan) ===== */
+        /* required styles */
+        .leaflet-pane,
+        .leaflet-tile,
+        .leaflet-marker-icon,
+        .leaflet-marker-shadow,
+        .leaflet-tile-container,
+        .leaflet-pane > svg,
+        .leaflet-pane > canvas,
+        .leaflet-zoom-box,
+        .leaflet-image-layer,
+        .leaflet-layer {
+            position: absolute;
+            left: 0;
+            top: 0;
+        }
+        .leaflet-container {
+            overflow: hidden;
+        }
+        .leaflet-tile,
+        .leaflet-marker-icon,
+        .leaflet-marker-shadow {
+            -webkit-user-select: none;
+               -moz-user-select: none;
+                    user-select: none;
+              -webkit-user-drag: none;
+        }
+        .leaflet-tile::selection {
+            background: transparent;
+        }
+        .leaflet-safari .leaflet-tile {
+            image-rendering: -webkit-optimize-contrast;
+        }
+        .leaflet-safari .leaflet-tile-container {
+            width: 1600px;
+            height: 1600px;
+            -webkit-transform-origin: 0 0;
+        }
+        .leaflet-marker-icon,
+        .leaflet-marker-shadow {
+            display: block;
+        }
+        .leaflet-container .leaflet-overlay-pane svg {
+            max-width: none !important;
+            max-height: none !important;
+        }
+        .leaflet-container .leaflet-marker-pane img,
+        .leaflet-container .leaflet-shadow-pane img,
+        .leaflet-container .leaflet-tile-pane img,
+        .leaflet-container img.leaflet-image-layer,
+        .leaflet-container .leaflet-tile {
+            max-width: none !important;
+            max-height: none !important;
+            width: auto;
+            padding: 0;
+        }
+        .leaflet-container img.leaflet-tile {
+            mix-blend-mode: plus-lighter;
+        }
+        .leaflet-container.leaflet-touch-zoom {
+            -ms-touch-action: pan-x pan-y;
+            touch-action: pan-x pan-y;
+        }
+        .leaflet-container.leaflet-touch-drag {
+            -ms-touch-action: pinch-zoom;
+            touch-action: none;
+            touch-action: pinch-zoom;
+        }
+        .leaflet-container.leaflet-touch-drag.leaflet-touch-zoom {
+            -ms-touch-action: none;
+            touch-action: none;
+        }
+        .leaflet-container {
+            -webkit-tap-highlight-color: transparent;
+        }
+        .leaflet-container a {
+            -webkit-tap-highlight-color: rgba(51,181,229,0.4);
+        }
+        .leaflet-tile {
+            filter: inherit;
+            visibility: hidden;
+        }
+        .leaflet-tile-loaded {
+            visibility: inherit;
+        }
+        .leaflet-zoom-box {
+            width: 0;
+            height: 0;
+            box-sizing: border-box;
+            z-index: 800;
+        }
+        .leaflet-overlay-pane svg {
+            -moz-user-select: none;
+        }
+        .leaflet-pane         { z-index: 400; }
+        .leaflet-tile-pane    { z-index: 200; }
+        .leaflet-overlay-pane { z-index: 400; }
+        .leaflet-shadow-pane  { z-index: 500; }
+        .leaflet-marker-pane  { z-index: 600; }
+        .leaflet-tooltip-pane   { z-index: 650; }
+        .leaflet-popup-pane   { z-index: 700; }
+        .leaflet-map-pane canvas { z-index: 100; }
+        .leaflet-map-pane svg    { z-index: 200; }
+        .leaflet-vml-shape {
+            width: 1px;
+            height: 1px;
+        }
+        .lvml {
+            behavior: url(#default#VML);
+            display: inline-block;
+            position: absolute;
+        }
+        .leaflet-control {
+            position: relative;
+            z-index: 800;
+            pointer-events: visiblePainted;
+            pointer-events: auto;
+        }
+        .leaflet-top,
+        .leaflet-bottom {
+            position: absolute;
+            z-index: 1000;
+            pointer-events: none;
+        }
+        .leaflet-top { top: 0; }
+        .leaflet-right { right: 0; }
+        .leaflet-bottom { bottom: 0; }
+        .leaflet-left { left: 0; }
+        .leaflet-control {
+            float: left;
+            clear: both;
+        }
+        .leaflet-right .leaflet-control { float: right; }
+        .leaflet-top .leaflet-control { margin-top: 10px; }
+        .leaflet-bottom .leaflet-control { margin-bottom: 10px; }
+        .leaflet-left .leaflet-control { margin-left: 10px; }
+        .leaflet-right .leaflet-control { margin-right: 10px; }
+        .leaflet-fade-anim .leaflet-popup {
+            opacity: 0;
+            transition: opacity 0.2s linear;
+        }
+        .leaflet-fade-anim .leaflet-map-pane .leaflet-popup { opacity: 1; }
+        .leaflet-zoom-animated {
+            transform-origin: 0 0;
+        }
+        svg.leaflet-zoom-animated { will-change: transform; }
+        .leaflet-zoom-anim .leaflet-zoom-animated {
+            transition: transform 0.25s cubic-bezier(0,0,0.25,1);
+        }
+        .leaflet-zoom-anim .leaflet-tile,
+        .leaflet-pan-anim .leaflet-tile { transition: none; }
+        .leaflet-zoom-anim .leaflet-zoom-hide { visibility: hidden; }
+        .leaflet-interactive { cursor: pointer; }
+        .leaflet-grab {
+            cursor: -webkit-grab;
+            cursor: -moz-grab;
+            cursor: grab;
+        }
+        .leaflet-crosshair,
+        .leaflet-crosshair .leaflet-interactive { cursor: crosshair; }
+        .leaflet-popup-pane,
+        .leaflet-control { cursor: auto; }
+        .leaflet-dragging .leaflet-grab,
+        .leaflet-dragging .leaflet-grab .leaflet-interactive,
+        .leaflet-dragging .leaflet-marker-draggable {
+            cursor: move;
+            cursor: -webkit-grabbing;
+            cursor: -moz-grabbing;
+            cursor: grabbing;
+        }
+        .leaflet-marker-icon,
+        .leaflet-marker-shadow,
+        .leaflet-image-layer,
+        .leaflet-pane > svg path,
+        .leaflet-tile-container { pointer-events: none; }
+        .leaflet-marker-icon.leaflet-interactive,
+        .leaflet-image-layer.leaflet-interactive,
+        .leaflet-pane > svg path.leaflet-interactive,
+        svg.leaflet-image-layer.leaflet-interactive path {
+            pointer-events: visiblePainted;
+            pointer-events: auto;
+        }
+        .leaflet-container {
+            background: #ddd;
+            outline-offset: 1px;
+        }
+        .leaflet-container a { color: #0078A8; }
+        .leaflet-zoom-box {
+            border: 2px dotted #38f;
+            background: rgba(255,255,255,0.5);
+        }
+        .leaflet-container {
+            font-family: "Helvetica Neue", Arial, Helvetica, sans-serif;
+            font-size: 12px;
+            font-size: 0.75rem;
+            line-height: 1.5;
+        }
+        .leaflet-bar {
+            box-shadow: 0 1px 5px rgba(0,0,0,0.65);
+            border-radius: 4px;
+        }
+        .leaflet-bar a {
+            background-color: #fff;
+            border-bottom: 1px solid #ccc;
+            width: 26px;
+            height: 26px;
+            line-height: 26px;
+            display: block;
+            text-align: center;
+            text-decoration: none;
+            color: black;
+        }
+        .leaflet-bar a,
+        .leaflet-control-layers-toggle {
+            background-position: 50% 50%;
+            background-repeat: no-repeat;
+            display: block;
+        }
+        .leaflet-bar a:hover,
+        .leaflet-bar a:focus { background-color: #f4f4f4; }
+        .leaflet-bar a:first-child {
+            border-top-left-radius: 4px;
+            border-top-right-radius: 4px;
+        }
+        .leaflet-bar a:last-child {
+            border-bottom-left-radius: 4px;
+            border-bottom-right-radius: 4px;
+            border-bottom: none;
+        }
+        .leaflet-bar a.leaflet-disabled {
+            cursor: default;
+            background-color: #f4f4f4;
+            color: #bbb;
+        }
+        .leaflet-touch .leaflet-bar a {
+            width: 30px;
+            height: 30px;
+            line-height: 30px;
+        }
+        .leaflet-touch .leaflet-bar a:first-child {
+            border-top-left-radius: 2px;
+            border-top-right-radius: 2px;
+        }
+        .leaflet-touch .leaflet-bar a:last-child {
+            border-bottom-left-radius: 2px;
+            border-bottom-right-radius: 2px;
+        }
+        .leaflet-control-zoom-in,
+        .leaflet-control-zoom-out {
+            font: bold 18px 'Lucida Console', Monaco, monospace;
+            text-indent: 1px;
+        }
+        .leaflet-touch .leaflet-control-zoom-in,
+        .leaflet-touch .leaflet-control-zoom-out { font-size: 22px; }
+        .leaflet-control-layers {
+            box-shadow: 0 1px 5px rgba(0,0,0,0.4);
+            background: #fff;
+            border-radius: 5px;
+        }
+        .leaflet-control-layers-toggle {
+            background-image: url(images/layers.png);
+            width: 36px;
+            height: 36px;
+        }
+        .leaflet-retina .leaflet-control-layers-toggle {
+            background-image: url(images/layers-2x.png);
+            background-size: 26px 26px;
+        }
+        .leaflet-touch .leaflet-control-layers-toggle {
+            width: 44px;
+            height: 44px;
+        }
+        .leaflet-control-layers .leaflet-control-layers-list,
+        .leaflet-control-layers-expanded .leaflet-control-layers-toggle { display: none; }
+        .leaflet-control-layers-expanded .leaflet-control-layers-list {
+            display: block;
+            position: relative;
+        }
+        .leaflet-control-layers-expanded {
+            padding: 6px 10px 6px 6px;
+            color: #333;
+            background: #fff;
+        }
+        .leaflet-control-layers-scrollbar {
+            overflow-y: scroll;
+            overflow-x: hidden;
+            padding-right: 5px;
+        }
+        .leaflet-control-layers-selector {
+            margin-top: 2px;
+            position: relative;
+            top: 1px;
+        }
+        .leaflet-control-layers label {
+            display: block;
+            font-size: 13px;
+            font-size: 1.08333em;
+        }
+        .leaflet-control-layers-separator {
+            height: 0;
+            border-top: 1px solid #ddd;
+            margin: 5px -10px 5px -6px;
+        }
+        .leaflet-default-icon-path {
+            background-image: url(images/marker-icon.png);
+        }
+        .leaflet-container .leaflet-control-attribution {
+            background: #fff;
+            background: rgba(255,255,255,0.8);
+            margin: 0;
+        }
+        .leaflet-control-attribution,
+        .leaflet-control-scale-line {
+            padding: 0 5px;
+            color: #333;
+            line-height: 1.4;
+        }
+        .leaflet-control-attribution a { text-decoration: none; }
+        .leaflet-control-attribution a:hover,
+        .leaflet-control-attribution a:focus { text-decoration: underline; }
+        .leaflet-attribution-flag {
+            display: inline !important;
+            vertical-align: baseline !important;
+            width: 1em;
+            height: 0.6669em;
+        }
+        .leaflet-left .leaflet-control-scale { margin-left: 5px; }
+        .leaflet-bottom .leaflet-control-scale { margin-bottom: 5px; }
+        .leaflet-control-scale-line {
+            border: 2px solid #777;
+            border-top: none;
+            line-height: 1.1;
+            padding: 2px 5px 1px;
+            white-space: nowrap;
+            box-sizing: border-box;
+            background: rgba(255,255,255,0.8);
+            text-shadow: 1px 1px #fff;
+        }
+        .leaflet-control-scale-line:not(:first-child) {
+            border-top: 2px solid #777;
+            border-bottom: none;
+            margin-top: -2px;
+        }
+        .leaflet-control-scale-line:not(:first-child):not(:last-child) {
+            border-bottom: 2px solid #777;
+        }
+        .leaflet-touch .leaflet-control-attribution,
+        .leaflet-touch .leaflet-control-layers,
+        .leaflet-touch .leaflet-bar { box-shadow: none; }
+        .leaflet-touch .leaflet-control-layers,
+        .leaflet-touch .leaflet-bar {
+            border: 2px solid rgba(0,0,0,0.2);
+            background-clip: padding-box;
+        }
+        .leaflet-popup {
+            position: absolute;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .leaflet-popup-content-wrapper {
+            padding: 1px;
+            text-align: left;
+            border-radius: 12px;
+        }
+        .leaflet-popup-content {
+            margin: 13px 24px 13px 20px;
+            line-height: 1.3;
+            font-size: 13px;
+            font-size: 1.08333em;
+            min-height: 1px;
+        }
+        .leaflet-popup-content p { margin: 17px 0; margin: 1.3em 0; }
+        .leaflet-popup-tip-container {
+            width: 40px;
+            height: 20px;
+            position: absolute;
+            left: 50%;
+            margin-top: -1px;
+            margin-left: -20px;
+            overflow: hidden;
+            pointer-events: none;
+        }
+        .leaflet-popup-tip {
+            width: 17px;
+            height: 17px;
+            padding: 1px;
+            margin: -10px auto 0;
+            pointer-events: auto;
+            transform: rotate(45deg);
+        }
+        .leaflet-popup-content-wrapper,
+        .leaflet-popup-tip {
+            background: white;
+            color: #333;
+            box-shadow: 0 3px 14px rgba(0,0,0,0.4);
+        }
+        .leaflet-container a.leaflet-popup-close-button {
+            position: absolute;
+            top: 0;
+            right: 0;
+            border: none;
+            text-align: center;
+            width: 24px;
+            height: 24px;
+            font: 16px/24px Tahoma, Verdana, sans-serif;
+            color: #757575;
+            text-decoration: none;
+            background: transparent;
+        }
+        .leaflet-container a.leaflet-popup-close-button:hover,
+        .leaflet-container a.leaflet-popup-close-button:focus { color: #585858; }
+        .leaflet-popup-scrolled { overflow: auto; }
+        .leaflet-oldie .leaflet-popup-content-wrapper { -ms-zoom: 1; }
+        .leaflet-oldie .leaflet-popup-tip {
+            width: 24px;
+            margin: 0 auto;
+            -ms-filter: "progid:DXImageTransform.Microsoft.Matrix(M11=0.70710678, M12=0.70710678, M21=-0.70710678, M22=0.70710678)";
+            filter: progid:DXImageTransform.Microsoft.Matrix(M11=0.70710678, M12=0.70710678, M21=-0.70710678, M22=0.70710678);
+        }
+        .leaflet-oldie .leaflet-control-zoom,
+        .leaflet-oldie .leaflet-control-layers,
+        .leaflet-oldie .leaflet-popup-content-wrapper,
+        .leaflet-oldie .leaflet-popup-tip { border: 1px solid #999; }
+        .leaflet-div-icon {
+            background: #fff;
+            border: 1px solid #666;
+        }
+        .leaflet-tooltip {
+            position: absolute;
+            padding: 6px;
+            background-color: #fff;
+            border: 1px solid #fff;
+            border-radius: 3px;
+            color: #222;
+            white-space: nowrap;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+            pointer-events: none;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+        }
+        .leaflet-tooltip.leaflet-interactive {
+            cursor: pointer;
+            pointer-events: auto;
+        }
+        .leaflet-tooltip-top:before,
+        .leaflet-tooltip-bottom:before,
+        .leaflet-tooltip-left:before,
+        .leaflet-tooltip-right:before {
+            position: absolute;
+            pointer-events: none;
+            border: 6px solid transparent;
+            background: transparent;
+            content: "";
+        }
+        .leaflet-tooltip-bottom { margin-top: 6px; }
+        .leaflet-tooltip-top { margin-top: -6px; }
+        .leaflet-tooltip-bottom:before,
+        .leaflet-tooltip-top:before {
+            left: 50%;
+            margin-left: -6px;
+        }
+        .leaflet-tooltip-top:before {
+            bottom: 0;
+            margin-bottom: -12px;
+            border-top-color: #fff;
+        }
+        .leaflet-tooltip-bottom:before {
+            top: 0;
+            margin-top: -12px;
+            margin-left: -6px;
+            border-bottom-color: #fff;
+        }
+        .leaflet-tooltip-left { margin-left: -6px; }
+        .leaflet-tooltip-right { margin-left: 6px; }
+        .leaflet-tooltip-left:before,
+        .leaflet-tooltip-right:before {
+            top: 50%;
+            margin-top: -6px;
+        }
+        .leaflet-tooltip-left:before {
+            right: 0;
+            margin-right: -12px;
+            border-left-color: #fff;
+        }
+        .leaflet-tooltip-right:before {
+            left: 0;
+            margin-left: -12px;
+            border-right-color: #fff;
+        }
+        @media print {
+            .leaflet-control {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+        }
+    </style>
+</head>
+<body class="bg-white text-gray-800 min-h-screen">
+
+    <nav class="bg-white shadow-md sticky top-0 z-20 border-b border-red-200">
+        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+            <h1 class="text-xl md:text-2xl font-bold text-red-600 flex items-center gap-2 truncate">
+                <svg class="w-6 h-6 md:w-8 md:h-8 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                </svg>
+                <span class="truncate"><%= site.title %></span>
+            </h1>
+            <div class="flex items-center gap-4">
+                <!-- Weather widget -->
+                <div id="weather-widget" class="flex items-center gap-2 text-gray-700 text-sm font-medium bg-red-50 px-3 py-1.5 rounded-full shadow-sm border border-red-200">
+                    <span id="weather-icon" class="text-lg md:text-xl">🌤️</span>
+                    <span id="weather-temp">--°C</span>
+                    <span id="weather-desc" class="hidden md:inline opacity-75 text-xs">Loading...</span>
+                </div>
+                <button id="mobile-menu-btn" class="md:hidden text-gray-600 hover:text-red-600 focus:outline-none">
+                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+        <div id="mobile-menu" class="hidden md:hidden bg-white border-t border-red-200 absolute w-full left-0 top-full shadow-lg">
+            <div class="flex flex-col p-4 gap-3"></div>
+        </div>
+    </nav>
+
+    <script>
+        document.getElementById('mobile-menu-btn')?.addEventListener('click', function() {
+            document.getElementById('mobile-menu').classList.toggle('hidden');
+        });
+    </script>
+
+    <% if (site && site.running_text) { %>
+    <div class="running-text-container mb-6">
+        <div class="running-text-content">
+            📢 <%= site.running_text %> &nbsp;&nbsp;&nbsp; • &nbsp;&nbsp;&nbsp; <%= new Date().toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) %>
+        </div>
+    </div>
+    <% } %>
+
+    <div class="container mx-auto px-4 pb-12">
+        <div class="flex justify-between items-center mb-6">
+            <h2 class="text-gray-500 text-sm uppercase tracking-wider font-bold">Monitoring Dashboard</h2>
+            <div class="flex bg-white rounded-lg p-1 border border-gray-300 shadow-sm">
+                <button onclick="switchView('grid')" id="btn-grid" class="view-active px-4 py-1.5 rounded-md text-sm font-medium text-gray-600 transition flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path>
+                    </svg>
+                    Grid View
+                </button>
+                <button onclick="switchView('map')" id="btn-map" class="px-4 py-1.5 rounded-md text-sm font-medium text-gray-500 hover:text-red-600 transition flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path>
+                    </svg>
+                    Map View
+                </button>
+            </div>
+        </div>
+
+        <div id="mapView" class="hidden animate-fade-in">
+            <div id="map" class="bg-gray-200"></div>
+            <p class="text-center text-gray-400 text-sm italic mt-2">* Klik ikon kamera pada peta untuk melihat live streaming.</p>
+        </div>
+
+        <div id="cctv-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 transition-all duration-300">
+            <% cameras.forEach(function(camera) { %>
+            <div class="camera-card bg-white rounded-lg overflow-hidden shadow-md border border-gray-200 transition hover:border-red-400 hover:shadow-xl hover:scale-[1.01] duration-300">
+                <div class="p-3 bg-red-50 border-b border-red-200 flex justify-between items-center">
+                    <div class="flex items-center gap-2">
+                        <span id="status-dot-<%= camera.id %>" class="w-3 h-3 rounded-full bg-gray-400 shadow-sm"></span>
+                        <h2 class="font-semibold text-gray-800 text-lg"><%= camera.nama %></h2>
+                    </div>
+                    <div class="text-right">
+                        <span id="status-text-<%= camera.id %>" class="text-[10px] uppercase font-bold text-gray-400 block">Checking...</span>
+                        <span class="text-[10px] text-gray-500 block"><%= camera.lokasi || 'Unknown' %></span>
+                    </div>
+                </div>
+                <div id="cam-container-<%= camera.id %>" class="relative w-full aspect-video bg-gray-800 group">
+                    <video id="video-<%= camera.id %>" class="absolute top-0 left-0 w-full h-full object-cover" controls autoplay muted playsinline crossorigin="anonymous"></video>
+                    <button onclick="toggleCamFullscreen('cam-container-<%= camera.id %>', 'video-<%= camera.id %>')" class="cam-action-btn absolute top-2 left-2 bg-gray-700 hover:bg-gray-600 text-white p-2.5 rounded-full shadow-lg opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300 z-10 flex items-center justify-center" title="Fullscreen">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4m-4 0l5 5m5-5l-5 5M4 16v4m0 0h4m-4 0l5-5m-5 5l5-5m-5 5v-4m0 4h-4"></path>
+                        </svg>
+                    </button>
+                    <button onclick="takeSnapshot('<%= camera.id %>', '<%= camera.nama %>')" class="cam-action-btn absolute top-2 right-2 bg-red-600 hover:bg-red-700 text-white p-2.5 rounded-full shadow-lg opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300 z-10 flex items-center justify-center" title="Take Snapshot">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                        </svg>
+                    </button>
+                    <div id="cam-overlay-<%= camera.id %>" class="absolute inset-0 flex items-center justify-center pointer-events-none opacity-100 transition duration-300">
+                        <div class="bg-black bg-opacity-60 px-3 py-1.5 rounded text-white text-xs md:text-sm text-center">
+                            <span id="cam-overlay-text-<%= camera.id %>">Menghubungkan ke stream...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <script>
+                (function(){
+                    var video = document.getElementById('video-<%= camera.id %>');
+                    var overlay = document.getElementById('cam-overlay-<%= camera.id %>');
+                    var overlayText = document.getElementById('cam-overlay-text-<%= camera.id %>');
+                    var baseUrl = '<%= mediamtx.public_hls_url %>' || (window.location.protocol + '//' + window.location.hostname + ':<%= hls_port %>');
+                    var transcodedSrc = baseUrl + '/cam_<%= camera.id %>/index.m3u8';
+                    var fallbackSrc = baseUrl + '/cam_<%= camera.id %>_input/index.m3u8';
+                    var usedFallback = false;
+                    var connectTimeout = null;
+                    var retryCount = 0;
+                    var maxRetries = 3;
+
+                    function setOverlay(visible, message) {
+                        if (!overlay) return;
+                        if (message && overlayText) overlayText.innerText = message;
+                        overlay.classList.toggle('opacity-0', !visible);
+                        overlay.classList.toggle('opacity-100', visible);
+                    }
+
+                    function initHls(src) {
+                        setOverlay(true, 'Menghubungkan ke stream...');
+                        if (connectTimeout) clearTimeout(connectTimeout);
+                        connectTimeout = setTimeout(function() {
+                            if (video && video.readyState < 2) {
+                                setOverlay(true, 'Gagal memuat stream. Silakan cek koneksi atau ulangi.');
+                            }
+                        }, 15000);
+
+                        if (Hls.isSupported()) {
+                            var hls = new Hls({ debug: false, lowLatencyMode: true, manifestLoadingTimeOut: 5000, manifestLoadingMaxRetry: 2, manifestLoadingRetryDelay: 1000 });
+                            hls.loadSource(src);
+                            hls.attachMedia(video);
+                            hls.on(Hls.Events.MANIFEST_PARSED, function() { video.play().catch(e => console.log('Autoplay blocked', e)); });
+                            if (!video._overlayPlayingBound) {
+                                video.addEventListener('playing', function() {
+                                    if (connectTimeout) { clearTimeout(connectTimeout); connectTimeout = null; }
+                                    setOverlay(false);
+                                });
+                                video._overlayPlayingBound = true;
+                            }
+                            hls.on(Hls.Events.ERROR, function(event, data) {
+                                if (data.fatal) {
+                                    switch (data.type) {
+                                        case Hls.ErrorTypes.NETWORK_ERROR:
+                                            if (!usedFallback && src === transcodedSrc) {
+                                                console.log('Transcoded stream not available for cam_<%= camera.id %>, trying raw input...');
+                                                usedFallback = true;
+                                                retryCount = 0;
+                                                hls.destroy();
+                                                initHls(fallbackSrc);
+                                            } else {
+                                                if (retryCount < maxRetries) {
+                                                    retryCount++;
+                                                    setOverlay(true, 'Gagal memuat stream, mencoba ulang (' + retryCount + '/' + maxRetries + ')...');
+                                                    setTimeout(() => hls.startLoad(), 3000);
+                                                } else {
+                                                    if (connectTimeout) { clearTimeout(connectTimeout); connectTimeout = null; }
+                                                    setOverlay(true, 'Gagal memuat stream. Silakan cek koneksi atau reload halaman.');
+                                                    hls.destroy();
+                                                }
+                                            }
+                                            break;
+                                        case Hls.ErrorTypes.MEDIA_ERROR:
+                                            hls.recoverMediaError();
+                                            break;
+                                        default:
+                                            hls.destroy();
+                                            break;
+                                    }
+                                }
+                            });
+                        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                            if (connectTimeout) { clearTimeout(connectTimeout); connectTimeout = null; }
+                            setOverlay(true, 'Menghubungkan ke stream...');
+                            video.src = fallbackSrc;
+                            video.addEventListener('loadedmetadata', function() { setOverlay(false); video.play(); });
+                        }
+                    }
+                    initHls(transcodedSrc);
+                })();
+            </script>
+            <% }); %>
+        </div>
+    </div>
+
+    <footer class="mt-12 py-6 bg-white border-t border-red-200 text-center text-gray-500 text-sm">
+        <%= site.footer %>
+    </footer>
+
+    <script id="server-data" type="application/json">
+        { "cameras": <%- JSON.stringify(cameras) %>, "hlsPort": <%= hls_port %> }
+    </script>
+
+    <script>
+        // Data from server
+        const serverData = JSON.parse(document.getElementById('server-data').textContent);
+        const camerasData = serverData.cameras;
+        const hlsPort = serverData.hlsPort;
+        let map = null;
+        let mapInitialized = false;
+
+        // Status polling
+        async function updateStatus() {
+            try {
+                const response = await fetch('/api/status');
+                const data = await response.json();
+                const apiCamIds = Object.keys(data.cameras);
+                if (!window.initialApiCamIds) window.initialApiCamIds = apiCamIds;
+                else if (apiCamIds.some(id => !window.initialApiCamIds.includes(id))) {
+                    if (!document.getElementById('refresh-toast')) showRefreshToast('Kamera baru terdeteksi! Klik untuk refresh.');
+                }
+                apiCamIds.forEach(id => {
+                    const status = data.cameras[id];
+                    const dot = document.getElementById(`status-dot-${id}`);
+                    const text = document.getElementById(`status-text-${id}`);
+                    if (!dot || !text) return;
+                    const isOnline = status && status.online;
+                    const isTranscoded = data.transcode && data.transcode[id] && data.transcode[id].transcoded;
+                    dot.classList.remove('bg-gray-400', 'bg-red-500', 'bg-green-500', 'bg-purple-500', 'animate-pulse');
+                    if (isOnline) {
+                        if (isTranscoded) {
+                            dot.classList.add('bg-purple-500', 'animate-pulse');
+                            text.innerText = 'H.264';
+                            text.classList.remove('text-gray-400', 'text-red-500', 'text-green-500', 'text-purple-600');
+                            text.classList.add('text-purple-600');
+                        } else {
+                            dot.classList.add('bg-green-500', 'animate-pulse');
+                            text.innerText = 'ONLINE';
+                            text.classList.remove('text-gray-400', 'text-red-500', 'text-purple-600', 'text-green-600');
+                            text.classList.add('text-green-600');
+                        }
+                    } else {
+                        dot.classList.add('bg-red-500');
+                        text.innerText = 'OFFLINE';
+                        text.classList.remove('text-gray-400', 'text-green-600', 'text-purple-600', 'text-red-600');
+                        text.classList.add('text-red-600');
+                    }
+                });
+            } catch (err) { console.error('Status poll error:', err); }
+        }
+        setInterval(updateStatus, 10000);
+        updateStatus();
+
+        // Fullscreen
+        function lockLandscapeInFullscreen() {
+            if (document.fullscreenElement && screen.orientation && screen.orientation.lock)
+                screen.orientation.lock('landscape').catch(() => {});
+            else if (!document.fullscreenElement && screen.orientation && screen.orientation.unlock)
+                screen.orientation.unlock().catch(() => {});
+        }
+        document.addEventListener('fullscreenchange', lockLandscapeInFullscreen);
+
+        function toggleCamFullscreen(containerId, videoId) {
+            const container = document.getElementById(containerId);
+            const video = videoId ? document.getElementById(videoId) : (container && container.querySelector('video'));
+            if (!container) return;
+            if (document.fullscreenElement) { document.exitFullscreen(); return; }
+            container.requestFullscreen().catch(() => {
+                if (video && (video.requestFullscreen || video.webkitEnterFullscreen)) {
+                    if (video.requestFullscreen) video.requestFullscreen();
+                    else if (video.webkitEnterFullscreen) video.webkitEnterFullscreen();
+                }
+            });
+        }
+
+        // Snapshot
+        function takeSnapshot(cameraId, cameraName) {
+            const video = document.getElementById('video-' + cameraId);
+            if (!video || video.readyState < 2) { alert('Video not ready yet.'); return; }
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth || 1280;
+            canvas.height = video.videoHeight || 720;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = 'rgba(0,0,0,0.5)';
+            ctx.fillRect(10, canvas.height - 40, canvas.width - 20, 30);
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '16px Arial';
+            ctx.fillText(cameraName + ' - ' + new Date().toLocaleString('id-ID'), 20, canvas.height - 20);
+            const link = document.createElement('a');
+            link.download = `snapshot_${cameraName.replace(/\s+/g, '_')}_${Date.now()}.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        }
+
+        // Service Worker
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js').then(reg => {
+                    console.log('SW registered:', reg);
+                    reg.onupdatefound = () => {
+                        const installing = reg.installing;
+                        installing.onstatechange = () => {
+                            if (installing.state === 'installed' && navigator.serviceWorker.controller)
+                                showRefreshToast('Aplikasi diperbarui. Klik untuk refresh.');
+                        };
+                    };
+                    if ('Notification' in window && Notification.permission === 'default')
+                        Notification.requestPermission().then(perm => {
+                            if (perm === 'granted') subscribeToPushNotifications(reg);
+                        });
+                }).catch(err => console.log('SW registration failed:', err));
+            });
+            navigator.serviceWorker.addEventListener('controllerchange', () => console.log('[SW] Controller changed'));
+        }
+
+        function showRefreshToast(message) {
+            if (document.getElementById('refresh-toast')) return;
+            const toast = document.createElement('div');
+            toast.id = 'refresh-toast';
+            toast.className = 'fixed bottom-20 left-1/2 transform -translate-x-1/2 bg-red-600 text-white px-6 py-3 rounded-full shadow-2xl z-50 cursor-pointer flex items-center gap-3 animate-bounce';
+            toast.innerHTML = `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg> ${message}`;
+            const hideTimeout = setTimeout(() => toast.remove(), 10000);
+            toast.onclick = () => { clearTimeout(hideTimeout); window.location.reload(); };
+            document.body.appendChild(toast);
+        }
+
+        async function subscribeToPushNotifications(registration) {
+            try {
+                const response = await fetch('/api/push-key');
+                if (!response.ok) return;
+                const { publicKey } = await response.json();
+                const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(publicKey) });
+                await fetch('/api/push-subscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(subscription) });
+                console.log('✅ Push notification subscribed');
+            } catch (err) { console.log('Push subscription failed:', err); }
+        }
+        function urlBase64ToUint8Array(base64String) {
+            const padding = '='.repeat((4 - base64String.length % 4) % 4);
+            const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+            const rawData = window.atob(base64);
+            return Uint8Array.from([...rawData].map((char) => char.charCodeAt(0)));
+        }
+
+        // View switch
+        function switchView(mode) {
+            const grid = document.getElementById('cctv-grid');
+            const mapView = document.getElementById('mapView');
+            const btnGrid = document.getElementById('btn-grid');
+            const btnMap = document.getElementById('btn-map');
+            if (mode === 'grid') {
+                grid.classList.remove('hidden');
+                mapView.classList.add('hidden');
+                btnGrid.classList.add('view-active');
+                btnGrid.classList.remove('text-gray-500');
+                btnMap.classList.remove('view-active');
+                btnMap.classList.add('text-gray-500');
+            } else {
+                grid.classList.add('hidden');
+                mapView.classList.remove('hidden');
+                btnMap.classList.add('view-active');
+                btnMap.classList.remove('text-gray-500');
+                btnGrid.classList.remove('view-active');
+                btnGrid.classList.add('text-gray-500');
+
+                // Pastikan map diinisialisasi setelah elemen terlihat
+                setTimeout(() => {
+                    if (!mapInitialized) {
+                        initMap();
+                        mapInitialized = true;
+                    } else {
+                        map.invalidateSize();
+                    }
+                }, 200);
+            }
+        }
+
+        // Map initialization
+        function initMap() {
+            // Cek apakah Leaflet tersedia
+            if (typeof L === 'undefined') {
+                console.error('Leaflet tidak tersedia. Pastikan script leaflet.js dimuat.');
+                return;
+            }
+
+            // Pastikan elemen map ada
+            const mapElement = document.getElementById('map');
+            if (!mapElement) return;
+
+            // Hapus icon default path untuk menghindari error
+            delete L.Icon.Default.prototype._getIconUrl;
+            L.Icon.Default.mergeOptions({
+                iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+                iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+                shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+            });
+
+            let center = [-6.2088, 106.8456]; // Jakarta
+            const validCam = camerasData.find(c => c.lat && c.lng);
+            if (validCam) center = [validCam.lat, validCam.lng];
+
+            map = L.map('map').setView(center, 13);
+
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+                maxZoom: 19
+            }).addTo(map);
+
+            camerasData.forEach(cam => {
+                if (!cam.lat || !cam.lng) return;
+                const marker = L.marker([cam.lat, cam.lng]).addTo(map);
+                const popupContent = `
+                    <div style="width:300px;">
+                        <h3 class="font-bold text-lg mb-2">${cam.nama}</h3>
+                        <p class="text-xs text-gray-500 mb-2">${cam.lokasi || ''}</p>
+                        <div class="relative w-full aspect-video bg-black rounded overflow-hidden">
+                            <video id="map-video-${cam.id}" class="absolute top-0 left-0 w-full h-full object-cover" controls autoplay muted playsinline></video>
+                        </div>
+                    </div>
+                `;
+                marker.bindPopup(popupContent);
+                marker.hlsInstance = null;
+
+                marker.on('popupopen', () => {
+                    const video = document.getElementById(`map-video-${cam.id}`);
+                    if (!video) return;
+                    const publicHlsUrl = '<%= mediamtx.public_hls_url %>';
+                    const baseUrl = publicHlsUrl || (window.location.protocol + '//' + window.location.hostname + ':' + hlsPort);
+                    const transcodedSrc = baseUrl + '/cam_' + cam.id + '/index.m3u8';
+                    const fallbackSrc = baseUrl + '/cam_' + cam.id + '_input/index.m3u8';
+
+                    if (Hls.isSupported()) {
+                        if (marker.hlsInstance) marker.hlsInstance.destroy();
+                        const hls = new Hls({ enableWorker: true, lowLatencyMode: false });
+                        marker.hlsInstance = hls;
+                        hls.loadSource(transcodedSrc);
+                        hls.attachMedia(video);
+                        hls.on(Hls.Events.ERROR, (event, data) => {
+                            if (data.fatal && data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+                                console.log('HLS network error, trying fallback...');
+                                hls.destroy();
+                                const hlsFallback = new Hls();
+                                marker.hlsInstance = hlsFallback;
+                                hlsFallback.loadSource(fallbackSrc);
+                                hlsFallback.attachMedia(video);
+                                hlsFallback.on(Hls.Events.MANIFEST_PARSED, () => video.play());
+                            }
+                        });
+                        hls.on(Hls.Events.MANIFEST_PARSED, () => video.play());
+                    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                        video.src = fallbackSrc;
+                        video.addEventListener('loadedmetadata', () => video.play());
+                    }
+                });
+
+                marker.on('popupclose', () => {
+                    if (marker.hlsInstance) { marker.hlsInstance.destroy(); marker.hlsInstance = null; }
+                    const video = document.getElementById(`map-video-${cam.id}`);
+                    if (video) { video.pause(); video.removeAttribute('src'); video.load(); }
+                });
+            });
+        }
+
+        // Weather
+        async function initWeather() {
+            let lat = -6.2088, lng = 106.8456;
+            const cam = camerasData?.find(c => c.lat && c.lng);
+            if (cam) { lat = cam.lat; lng = cam.lng; }
+            try {
+                const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current_weather=true`);
+                const data = await res.json();
+                const weather = data.current_weather;
+                const code = weather.weathercode;
+                let icon = '🌤️', desc = 'Cerah';
+                if (code <= 3) { icon = '🌤️'; desc = 'Cerah/Berawan'; }
+                else if (code <= 48) { icon = '🌫️'; desc = 'Kabut'; }
+                else if (code <= 67) { icon = '🌧️'; desc = 'Hujan'; }
+                else if (code <= 77) { icon = '🌨️'; desc = 'Salju'; }
+                else if (code <= 82) { icon = '⛈️'; desc = 'Hujan Deras'; }
+                else if (code <= 99) { icon = '⚡'; desc = 'Badai Petir'; }
+                document.getElementById('weather-icon').innerText = icon;
+                document.getElementById('weather-temp').innerText = `${Math.round(weather.temperature)}°C`;
+                document.getElementById('weather-desc').innerText = desc;
+            } catch (e) { console.error('Weather fetch error:', e); }
+        }
+        initWeather();
+        setInterval(initWeather, 600000);
+    </script>
+</body>
+</html>
